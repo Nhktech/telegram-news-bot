@@ -1,13 +1,17 @@
+import os
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 from deep_translator import GoogleTranslator
 
 api_id = 39334379
 api_hash = "7fb7d9bd7c531ebba0b9b434c9744009"
 
+session = os.getenv("SESSION")
+
+client = TelegramClient(StringSession(session), api_id, api_hash)
+
 source_channel = "presstv"
 target_channel = "yaamahdi_hausa"
-
-client = TelegramClient("bot", api_id, api_hash)
 
 @client.on(events.NewMessage(chats=source_channel))
 async def handler(event):
@@ -29,6 +33,6 @@ async def handler(event):
     else:
         await client.send_message(target_channel, caption)
 
-client.start()
-print("Bot is running...")
-client.run_until_disconnected()
+with client:
+    print("Bot is running...")
+    client.run_until_disconnected()
