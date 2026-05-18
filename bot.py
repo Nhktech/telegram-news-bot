@@ -7,9 +7,9 @@ from google import genai
 # =========================
 # ENV VARIABLES
 # =========================
-API_ID = int(os.getenv("39334379"))
-API_HASH = os.getenv("7fb7d9bd7c531ebba0b9b434c9744009")
-SESSION = os.getenv("1BJWap1wBu2WWbvqpofNeEexW_hUVS8BPJ6OrPwZ7eZV0CNKw5NTJwjv4KB02B_M9TVn73m0jPOdN2oHKpkfrlzaxPedIYPQxtkhvNNSXkpQbFFR2hOMIleeF5GPVgWrnWXfIJGuKgmzCEJ1o1PIb2WXWUXCLMtcE0zBV3TK1FqCWqd7aTB3C8QpdZeAuXlXdPRlU6AO2U80bH82LwqNTyEfmwzpWid9bP_WamiZufeeIJY7TJTdrex0zaaVgZNud7GMuBkquNLVitQ_1FGLL1Yqky92XdhS3fvYtzjLKyWu2M5PgHNtnSlKz8Nr5_MJNd8yS92-PAXXLJUsURAoR0M40ntcQD2w=")
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+SESSION = os.getenv("SESSION")
 GEMINI_API_KEY = os.getenv("AIzaSyBFDOPwPb53MBowrRgBg87VN1hjsISg7M0")
 
 if not SESSION:
