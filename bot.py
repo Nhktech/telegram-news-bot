@@ -8,6 +8,9 @@ api_hash = "7fb7d9bd7c531ebba0b9b434c9744009"
 
 session = os.getenv("SESSION")
 
+if not session:
+    raise Exception("SESSION not found in environment variables")
+
 client = TelegramClient(StringSession(session), api_id, api_hash)
 
 source_channel = "presstv"
@@ -33,6 +36,7 @@ async def handler(event):
     else:
         await client.send_message(target_channel, caption)
 
+print("Bot is running...")
+
 with client:
-    print("Bot is running...")
     client.run_until_disconnected()
