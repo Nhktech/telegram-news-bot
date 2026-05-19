@@ -22,15 +22,11 @@ API_ID = int(API_ID)
 # GEMINI CLIENT
 # =========================
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-
-# Samfuri mafi sauri don kiyaye gudun sakan 10
 MODEL_NAME = "gemini-2.5-flash-lite"
 
-def translate_to_hausa(text):
+async def translate_to_hausa(text):
     try:
-        # HADAWA: An gyara sannan an rufe fassaran nan daidai da """ a kasa
-        prompt = f"""
-Translate the following English news into SIMPLE, CLEAR Hausa.
+        prompt = f"""Translate the following English news into SIMPLE, CLEAR Hausa.
 
 Rules:
 - Keep meaning accurate
@@ -41,8 +37,6 @@ Rules:
 TEXT:
 {text}
 """
-
-        # Tsarin tsaro don cire jinkirin tantance kalmomi
         config = types.GenerateContentConfig(
             safety_settings=[
                 types.SafetySetting(
@@ -64,7 +58,8 @@ TEXT:
             ]
         )
 
-        response = gemini_client.models.generate_content(
+        response = await asyncio.to_thread(
+            gemini_client.models.generate_content,
             model=MODEL_NAME,
             contents=prompt,
             config=config
@@ -119,7 +114,7 @@ async def handler(event):
 
     await asyncio.sleep(delay)
 
-    translated = translate_to_hausa(text[:4000])
+    translated = await translate_to_hausa(text[:4000])
 
     caption = f"""📰 LABARAI
 
