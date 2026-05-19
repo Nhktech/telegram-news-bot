@@ -7,15 +7,22 @@ from google import genai
 # =========================
 # ENV VARIABLES
 # =========================
-API_ID = int(os.getenv("API_ID"))
+API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
 SESSION = os.getenv("SESSION")
-GEMINI_API_KEY = os.getenv("AIzaSyBFDOPwPb53MBowrRgBg87VN1hjsISg7M0")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+# CHECKS
+if not API_ID:
+    raise Exception("API_ID not found in environment variables")
+if not API_HASH:
+    raise Exception("API_HASH not found in environment variables")
 if not SESSION:
-    raise Exception("SESSION not found")
+    raise Exception("SESSION not found in environment variables")
 if not GEMINI_API_KEY:
-    raise Exception("GEMINI_API_KEY not found")
+    raise Exception("GEMINI_API_KEY not found in environment variables")
+
+API_ID = int(API_ID)
 
 # =========================
 # GEMINI CLIENT
@@ -36,11 +43,14 @@ Rules:
 TEXT:
 {text}
 """
+
         response = gemini_client.models.generate_content(
             model="gemini-3-flash-preview",
             contents=prompt
         )
+
         return response.text
+
     except Exception as e:
         return f"Translation error: {str(e)}"
 
@@ -60,21 +70,24 @@ async def handler(event):
     msg = event.message
     text = msg.message or ""
 
-    if text:
-        translated = translate_to_hausa(text[:4000])
+    if not text:
+        return
 
-        caption = f"""📰 LABARAI
+    translated = translate_to_hausa(text[:4000])
+
+    caption = f"""📰 LABARAI
 
 {translated}
 
 📢 @yaamahdi_hausa"""
-    else:
-        caption = None
 
-    if msg.media:
-        await client.send_file(target_channel, msg.media, caption=caption)
-    else:
-        await client.send_message(target_channel, caption)
+    try:
+        if msg.media:
+            await client.send_file(target_channel, msg.media, caption=caption)
+        else:
+            await client.send_message(target_channel, caption)
+    except Exception as e:
+        print("Send error:", e)
 
 # =========================
 # START BOT
