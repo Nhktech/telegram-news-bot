@@ -1,4 +1,5 @@
 import os
+import sys
 import asyncio
 from pyrogram import Client, filters
 from google import genai
@@ -7,17 +8,43 @@ from deep_translator import GoogleTranslator
 # ==========================================
 # 1. SAITA BAYANAN USERBOT DA API KEYS (DAGA CLOUD)
 # ==========================================
-# Yanzu muna amfani da 'os.environ' domin daukar bayanan daga sabar intanet (Cloud)
-# Wannan ya fi tsaro, ba sai ka rubuta su a fili a nan ba.
-API_ID = int(os.environ.get("API_ID", 0))
-API_HASH = os.environ.get("API_HASH", "")
-SESSION_STRING = os.environ.get("SESSION_STRING", "")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+def get_channel_id(env_var_name):
+    """
+    Wannan function din zai taimaka wajen fahimtar ko ka saka ID (lamba),
+    'me' (Saved Messages), ko username (@sunanchannel).
+    """
+    val = os.environ.get(env_var_name)
+    if not val:
+        print(f"[-] Kuskure: Baka saita {env_var_name} ba a Environment Variables!")
+        sys.exit(1)
+    
+    val = val.strip()
+    if val.lower() == "me":
+        return "me"
+    
+    try:
+        return int(val)
+    except ValueError:
+        return val # Zai dawo da username idan ba lamba bane
 
-SOURCE_CHANNEL = int(os.environ.get("SOURCE_CHANNEL", 0))
-DEST_CHANNEL = int(os.environ.get("DEST_CHANNEL", 0))
+try:
+    API_ID = int(os.environ.get("API_ID"))
+except (TypeError, ValueError):
+    print("[-] Kuskure: Baka saita API_ID daidai ba (yana bukatar zama lamba)!")
+    sys.exit(1)
 
-# Tada Pyrogram Client ta hanyar amfani da Session String
+SOURCE_CHANNEL = get_channel_id("SOURCE_CHANNEL")
+DEST_CHANNEL = get_channel_id("DEST_CHANNEL")
+
+API_HASH = os.environ.get("API_HASH")
+SESSION_STRING = os.environ.get("SESSION_STRING")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if not all([API_HASH, SESSION_STRING, GEMINI_API_KEY]):
+    print("[-] Kuskure: Akwai bayanan sirri (kamar HASH, SESSION, ko API KEY) da baka saka ba!")
+    sys.exit(1)
+
+# Tada Pyrogram Client
 app = Client(
     name="fassara_userbot",
     api_id=API_ID,
@@ -32,15 +59,10 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 # 2. TSARIN FASSARA TARE DA FALLBACK
 # ==========================================
 def fassara_zuwa_hausa(text):
-    """
-    Wannan function din zai amshi rubutu ya fassara zuwa Hausa
-    ta amfani da Gemini. Idan ya kasa, zai koma kan Google Translate.
-    """
     if not text:
         return ""
     
     try:
-        # Prompt na musamman don tabbatar da Hausa mai kyau
         prompt = f"""Fassara wannan rubutun zuwa harshen Hausa mai sauƙin fahimta. 
         Ka kula da kiyaye ma'anar asali ba tare da fassarar inji (literal translation) ba. 
         Kar ka sanya wani ƙarin bayani naku na AI ko gaisuwa, kawai fassarar zalla: 
@@ -55,13 +77,12 @@ def fassara_zuwa_hausa(text):
 
     except Exception as e:
         print(f"[-] Gemini ya samu matsala: {e}. Ana amfani da Fallback...")
-        # Fallback: Amfani da Google Translator idan AI bai yi aiki ba
         try:
             translator = GoogleTranslator(source='auto', target='hausa')
             return translator.translate(text)
         except Exception as fallback_error:
             print(f"[-] Fallback ma ya kasa: {fallback_error}")
-            return text # Idan duka biyun suka kasa, mayar da rubutun asali
+            return text
 
 # ==========================================
 # 3. TSARIN AUTO-REPOST
@@ -69,25 +90,22 @@ def fassara_zuwa_hausa(text):
 @app.on_message(filters.chat(SOURCE_CHANNEL))
 async def handle_posts(client, message):
     try:
-        # Ciro asalin rubutun (ko da na text ne ko kuma caption na hoto/video)
+        # Ciro asalin rubutun
         original_text = message.text or message.caption or ""
         
         hausa_text = ""
         
         if original_text:
             print("[*] An ga sabon post, ana fassara...")
-            # Yin amfani da asyncio don gudun hana bot din yin wasu ayyukan yayin jiran fassara
             hausa_text = await asyncio.to_thread(fassara_zuwa_hausa, original_text)
 
-        # Pyrogram's copy() zai dauki duk wani nau'in sako (hoto, video, document, text) 
-        # ya tura shi kai tsaye da sabon caption
+        # Turawa zuwa sabon channel da fassarar
         if original_text:
             await message.copy(DEST_CHANNEL, caption=hausa_text)
         else:
-            # Idan sakon bashi da text kwata-kwata (misali hoto kawai ba caption)
             await message.copy(DEST_CHANNEL)
 
-        print("[+] An samu nasarar turawa zuwa sabon channel!")
+        print(f"[+] An samu nasarar turawa zuwa {DEST_CHANNEL}!")
 
     except Exception as e:
         print(f"[-] An samu matsala wajen turawa: {e}")
@@ -97,10 +115,8 @@ async def handle_posts(client, message):
 # ==========================================
 if __name__ == "__main__":
     print("[*] Userbot yana aiki. Ana jiran sakonni...")
-    print("[*] Latsa Ctrl+C don tsayarwa.")
+    print(f"[*] Ana duba: {SOURCE_CHANNEL} | Ana turawa zuwa: {DEST_CHANNEL}")
     try:
         app.run()
-    except KeyboardInterrupt:
-        print("\n[*] An tsayar da Userbot.")
     except Exception as e:
         print(f"[-] Wata babbar matsala ta faru: {e}")
