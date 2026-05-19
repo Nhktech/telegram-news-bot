@@ -8,40 +8,32 @@ from deep_translator import GoogleTranslator
 # ==========================================
 # 1. SAITA BAYANAN USERBOT DA API KEYS (DAGA CLOUD)
 # ==========================================
-def get_channel_id(env_var_name):
-    """
-    Wannan function din zai taimaka wajen fahimtar ko ka saka ID (lamba),
-    'me' (Saved Messages), ko username (@sunanchannel).
-    """
-    val = os.environ.get(env_var_name)
+# Function don gane lamba (ID) ko rubutu ("me" ko "@username")
+def parse_channel(val):
     if not val:
-        print(f"[-] Kuskure: Baka saita {env_var_name} ba a Environment Variables!")
-        sys.exit(1)
-    
-    val = val.strip()
-    if val.lower() == "me":
-        return "me"
-    
+        return ""
     try:
         return int(val)
     except ValueError:
-        return val # Zai dawo da username idan ba lamba bane
+        return val
 
+# Karbar bayanai daga Environment Variables tare da tsaro
 try:
-    API_ID = int(os.environ.get("API_ID"))
-except (TypeError, ValueError):
-    print("[-] Kuskure: Baka saita API_ID daidai ba (yana bukatar zama lamba)!")
+    API_ID = int(os.environ.get("API_ID", 0))
+except ValueError:
+    print("[-] Kuskure: Baka saita API_ID daidai ba!")
     sys.exit(1)
-
-SOURCE_CHANNEL = get_channel_id("SOURCE_CHANNEL")
-DEST_CHANNEL = get_channel_id("DEST_CHANNEL")
 
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-if not all([API_HASH, SESSION_STRING, GEMINI_API_KEY]):
-    print("[-] Kuskure: Akwai bayanan sirri (kamar HASH, SESSION, ko API KEY) da baka saka ba!")
+# Yanzu zai amshi ko wane irin tsari ne ("me", lamba, ko username)
+SOURCE_CHANNEL = parse_channel(os.environ.get("SOURCE_CHANNEL"))
+DEST_CHANNEL = parse_channel(os.environ.get("DEST_CHANNEL"))
+
+if not all([API_HASH, SESSION_STRING, GEMINI_API_KEY, SOURCE_CHANNEL, DEST_CHANNEL]):
+    print("[-] Kuskure: Akwai bayanan sirri da baka saka ba a Tranger Cloud!")
     sys.exit(1)
 
 # Tada Pyrogram Client
@@ -90,22 +82,25 @@ def fassara_zuwa_hausa(text):
 @app.on_message(filters.chat(SOURCE_CHANNEL))
 async def handle_posts(client, message):
     try:
+        # Matakin tsaro don hana bot din yin loop idan an samu kuskure
+        if str(message.chat.id) == str(DEST_CHANNEL) or message.chat.username == str(DEST_CHANNEL).replace("@", ""):
+            return
+
         # Ciro asalin rubutun
         original_text = message.text or message.caption or ""
-        
         hausa_text = ""
         
         if original_text:
             print("[*] An ga sabon post, ana fassara...")
             hausa_text = await asyncio.to_thread(fassara_zuwa_hausa, original_text)
 
-        # Turawa zuwa sabon channel da fassarar
+        # Turawa zuwa inda aka saita (DEST_CHANNEL)
         if original_text:
             await message.copy(DEST_CHANNEL, caption=hausa_text)
         else:
             await message.copy(DEST_CHANNEL)
 
-        print(f"[+] An samu nasarar turawa zuwa {DEST_CHANNEL}!")
+        print("[+] An samu nasarar turawa!")
 
     except Exception as e:
         print(f"[-] An samu matsala wajen turawa: {e}")
@@ -115,7 +110,7 @@ async def handle_posts(client, message):
 # ==========================================
 if __name__ == "__main__":
     print("[*] Userbot yana aiki. Ana jiran sakonni...")
-    print(f"[*] Ana duba: {SOURCE_CHANNEL} | Ana turawa zuwa: {DEST_CHANNEL}")
+    print(f"[*] Source: {SOURCE_CHANNEL} | Destination: {DEST_CHANNEL}")
     try:
         app.run()
     except Exception as e:
