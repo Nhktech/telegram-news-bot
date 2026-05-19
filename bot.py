@@ -1,150 +1,106 @@
 import os
 import asyncio
-from telethon import TelegramClient, events
-from telethon.sessions import StringSession
+from pyrogram import Client, filters
 from google import genai
-from google.genai import types
+from deep_translator import GoogleTranslator
 
-# =========================
-# ENV VARIABLES
-# =========================
-API_ID = os.getenv("API_ID")
-API_HASH = os.getenv("API_HASH")
-SESSION = os.getenv("SESSION")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# ==========================================
+# 1. SAITA BAYANAN USERBOT DA API KEYS (DAGA CLOUD)
+# ==========================================
+# Yanzu muna amfani da 'os.environ' domin daukar bayanan daga sabar intanet (Cloud)
+# Wannan ya fi tsaro, ba sai ka rubuta su a fili a nan ba.
+API_ID = int(os.environ.get("API_ID", 0))
+API_HASH = os.environ.get("API_HASH", "")
+SESSION_STRING = os.environ.get("SESSION_STRING", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-if not all([API_ID, API_HASH, SESSION, GEMINI_API_KEY]):
-    raise Exception("Missing environment variables")
+SOURCE_CHANNEL = int(os.environ.get("SOURCE_CHANNEL", 0))
+DEST_CHANNEL = int(os.environ.get("DEST_CHANNEL", 0))
 
-API_ID = int(API_ID)
+# Tada Pyrogram Client ta hanyar amfani da Session String
+app = Client(
+    name="fassara_userbot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=SESSION_STRING
+)
 
-# =========================
-# GEMINI CLIENT
-# =========================
+# Tada Gemini Client don fassara
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-2.5-flash-lite"
 
-async def translate_to_hausa(text):
-    try:
-        prompt = f"""Translate the following English news into SIMPLE, CLEAR Hausa.
-
-Rules:
-- Keep meaning accurate
-- Do NOT add extra info
-- Keep paragraph structure
-- Make it natural Hausa
-
-TEXT:
-{text}
-"""
-        config = types.GenerateContentConfig(
-            safety_settings=[
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ]
-        )
-
-        response = await asyncio.to_thread(
-            gemini_client.models.generate_content,
-            model=MODEL_NAME,
-            contents=prompt,
-            config=config
-        )
-
-        if response and response.text:
-            return response.text
-
-        return "Translation failed"
-
-    except Exception as e:
-        return f"Translation error: {str(e)}"
-
-# =========================
-# BREAKING NEWS DETECTOR
-# =========================
-def is_breaking(text):
-    text = text.lower()
-    return any(keyword in text for keyword in [
-        "breaking",
-        "urgent",
-        "alert",
-        "just in",
-        "now",
-        "update",
-        "developing"
-    ])
-
-# =========================
-# TELEGRAM CLIENT
-# =========================
-client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
-
-source_channel = "presstv"
-target_channel = "yaamahdi_hausa"
-
-# =========================
-# HANDLER
-# =========================
-@client.on(events.NewMessage(chats=source_channel))
-async def handler(event):
-    msg = event.message
-    text = msg.message or ""
-
+# ==========================================
+# 2. TSARIN FASSARA TARE DA FALLBACK
+# ==========================================
+def fassara_zuwa_hausa(text):
+    """
+    Wannan function din zai amshi rubutu ya fassara zuwa Hausa
+    ta amfani da Gemini. Idan ya kasa, zai koma kan Google Translate.
+    """
     if not text:
-        return
-
-    if is_breaking(text):
-        delay = 0
-    else:
-        delay = 1
-
-    await asyncio.sleep(delay)
-
-    translated = await translate_to_hausa(text[:4000])
-
-    caption = f"""📰 LABARAI
-
-{translated}
-
-📢 @yaamahdi_hausa"""
-
+        return ""
+    
     try:
-        if msg.media:
-            await client.send_file(
-                target_channel,
-                file=msg.media,
-                caption=caption
-            )
-        else:
-            await client.send_message(
-                target_channel,
-                caption
-            )
+        # Prompt na musamman don tabbatar da Hausa mai kyau
+        prompt = f"""Fassara wannan rubutun zuwa harshen Hausa mai sauƙin fahimta. 
+        Ka kula da kiyaye ma'anar asali ba tare da fassarar inji (literal translation) ba. 
+        Kar ka sanya wani ƙarin bayani naku na AI ko gaisuwa, kawai fassarar zalla: 
+
+        {text}"""
+        
+        response = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text
 
     except Exception as e:
-        print("Send error:", e)
+        print(f"[-] Gemini ya samu matsala: {e}. Ana amfani da Fallback...")
+        # Fallback: Amfani da Google Translator idan AI bai yi aiki ba
+        try:
+            translator = GoogleTranslator(source='auto', target='hausa')
+            return translator.translate(text)
+        except Exception as fallback_error:
+            print(f"[-] Fallback ma ya kasa: {fallback_error}")
+            return text # Idan duka biyun suka kasa, mayar da rubutun asali
 
-# =========================
-# START BOT
-# =========================
-async def main():
-    await client.start()
-    print("Bot is running...")
-    await client.run_until_disconnected()
+# ==========================================
+# 3. TSARIN AUTO-REPOST
+# ==========================================
+@app.on_message(filters.chat(SOURCE_CHANNEL))
+async def handle_posts(client, message):
+    try:
+        # Ciro asalin rubutun (ko da na text ne ko kuma caption na hoto/video)
+        original_text = message.text or message.caption or ""
+        
+        hausa_text = ""
+        
+        if original_text:
+            print("[*] An ga sabon post, ana fassara...")
+            # Yin amfani da asyncio don gudun hana bot din yin wasu ayyukan yayin jiran fassara
+            hausa_text = await asyncio.to_thread(fassara_zuwa_hausa, original_text)
 
+        # Pyrogram's copy() zai dauki duk wani nau'in sako (hoto, video, document, text) 
+        # ya tura shi kai tsaye da sabon caption
+        if original_text:
+            await message.copy(DEST_CHANNEL, caption=hausa_text)
+        else:
+            # Idan sakon bashi da text kwata-kwata (misali hoto kawai ba caption)
+            await message.copy(DEST_CHANNEL)
+
+        print("[+] An samu nasarar turawa zuwa sabon channel!")
+
+    except Exception as e:
+        print(f"[-] An samu matsala wajen turawa: {e}")
+
+# ==========================================
+# 4. TADA USERBOT
+# ==========================================
 if __name__ == "__main__":
-    asyncio.run(main())
+    print("[*] Userbot yana aiki. Ana jiran sakonni...")
+    print("[*] Latsa Ctrl+C don tsayarwa.")
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        print("\n[*] An tsayar da Userbot.")
+    except Exception as e:
+        print(f"[-] Wata babbar matsala ta faru: {e}")
