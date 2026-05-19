@@ -1,3 +1,2 @@
-
-telethon
-google-genai
+telethon==1.36.0
+google-genai==2.4.0
