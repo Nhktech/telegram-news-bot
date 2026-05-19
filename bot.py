@@ -12,15 +12,8 @@ API_HASH = os.getenv("API_HASH")
 SESSION = os.getenv("SESSION")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# CHECKS
-if not API_ID:
-    raise Exception("API_ID not found in environment variables")
-if not API_HASH:
-    raise Exception("API_HASH not found in environment variables")
-if not SESSION:
-    raise Exception("SESSION not found in environment variables")
-if not GEMINI_API_KEY:
-    raise Exception("GEMINI_API_KEY not found in environment variables")
+if not all([API_ID, API_HASH, SESSION, GEMINI_API_KEY]):
+    raise Exception("Missing environment variables")
 
 API_ID = int(API_ID)
 
@@ -28,6 +21,8 @@ API_ID = int(API_ID)
 # GEMINI CLIENT
 # =========================
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
+MODEL_NAME = "gemini-1.5-flash"
 
 def translate_to_hausa(text):
     try:
@@ -37,7 +32,7 @@ Translate the following English news into SIMPLE, CLEAR Hausa.
 Rules:
 - Keep meaning accurate
 - Do NOT add extra info
-- Keep paragraphs same structure
+- Keep paragraph structure
 - Make it natural Hausa
 
 TEXT:
@@ -45,17 +40,35 @@ TEXT:
 """
 
         response = gemini_client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model=MODEL_NAME,
             contents=prompt
         )
 
-        return response.text
+        if response and response.candidates:
+            return response.candidates[0].content.parts[0].text
+
+        return "Translation failed"
 
     except Exception as e:
         return f"Translation error: {str(e)}"
 
 # =========================
-# TELETHON CLIENT
+# BREAKING NEWS DETECTOR
+# =========================
+def is_breaking(text):
+    text = text.lower()
+    return any(keyword in text for keyword in [
+        "breaking",
+        "urgent",
+        "alert",
+        "just in",
+        "now",
+        "update",
+        "developing"
+    ])
+
+# =========================
+# TELEGRAM CLIENT
 # =========================
 client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
 
@@ -73,6 +86,16 @@ async def handler(event):
     if not text:
         return
 
+    # =========================
+    # PRIORITY DELAY SYSTEM
+    # =========================
+    if is_breaking(text):
+        delay = 0
+    else:
+        delay = 10
+
+    await asyncio.sleep(delay)
+
     translated = translate_to_hausa(text[:4000])
 
     caption = f"""📰 LABARAI
@@ -83,9 +106,17 @@ async def handler(event):
 
     try:
         if msg.media:
-            await client.send_file(target_channel, msg.media, caption=caption)
+            await client.send_file(
+                target_channel,
+                file=msg.media,
+                caption=caption
+            )
         else:
-            await client.send_message(target_channel, caption)
+            await client.send_message(
+                target_channel,
+                caption
+            )
+
     except Exception as e:
         print("Send error:", e)
 
@@ -97,4 +128,5 @@ async def main():
     print("Bot is running...")
     await client.run_until_disconnected()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
