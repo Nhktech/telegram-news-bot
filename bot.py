@@ -10,18 +10,24 @@ from pyrogram.types import InputMediaPhoto, InputMediaVideo
 # ==========================================
 # SAITA BAYANANKA TA HANYAR "ENVIRONMENT VARIABLES"
 # ==========================================
-# Injin zai dauko wadannan a cikin "Values" din Tranger Cloud dinka
 try:
     API_ID = int(os.environ.get("API_ID"))
     API_HASH = os.environ.get("API_HASH")
     TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL")
+    SESSION_STRING = os.environ.get("SESSION_STRING")
 except Exception as e:
-    print("⚠️ Baka saka API_ID ko API_HASH ko TARGET_CHANNEL a cikin Values din Server ba!")
+    print("⚠️ Baka saka API_ID, API_HASH, TARGET_CHANNEL ko SESSION_STRING a cikin Values din Server ba!")
 
 SOURCE_CHANNEL = "@PressTV"
 DEST_CHANNEL = "me"  
 
-app = Client(name="my_account", api_id=API_ID, api_hash=API_HASH)
+# SABON TSARI: Muna amfani da SESSION_STRING maimakon fayil din my_account.session
+app = Client(
+    name="my_account", 
+    session_string=SESSION_STRING, 
+    api_id=API_ID, 
+    api_hash=API_HASH
+)
 
 # ==========================================
 # GAYARWA: Aikin yanka saƙon da yayi tsayi
