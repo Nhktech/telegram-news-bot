@@ -21,7 +21,6 @@ except Exception as e:
 SOURCE_CHANNEL = "@PressTV"
 DEST_CHANNEL = "me"  
 
-# SABON TSARI: Muna amfani da SESSION_STRING maimakon fayil din my_account.session
 app = Client(
     name="my_account", 
     session_string=SESSION_STRING, 
@@ -29,12 +28,8 @@ app = Client(
     api_hash=API_HASH
 )
 
-# ==========================================
-# GAYARWA: Aikin yanka saƙon da yayi tsayi
-# ==========================================
 async def send_long_message(message, text):
-    if not text:
-        return
+    if not text: return
     for i in range(0, len(text), 4000):
         await message.reply_text(text[i:i+4000])
         await asyncio.sleep(0.5)
@@ -133,14 +128,21 @@ async def kwaso_labarai(client, message):
         text = msg.text or msg.caption or ""
         if msg.media_group_id:
             if msg.media_group_id not in media_groups:
-                new_item = {"texts": [], "media_ids": []}
+                new_item = {"texts": [], "media_ids": [], "has_video": False, "has_photo": False}
                 media_groups[msg.media_group_id] = new_item
                 raw_items.append(new_item) 
             group = media_groups[msg.media_group_id]
             if text and text not in group["texts"]: group["texts"].append(text)
             group["media_ids"].append(msg.id)
+            if msg.video: group["has_video"] = True
+            if msg.photo: group["has_photo"] = True
         else:
-            raw_items.append({"texts": [text] if text else [], "media_ids": [msg.id] if msg.media else []})
+            raw_items.append({
+                "texts": [text] if text else [], 
+                "media_ids": [msg.id] if msg.media else [],
+                "has_video": bool(msg.video),
+                "has_photo": bool(msg.photo)
+            })
             
     for item in raw_items:
         item["text"] = "\n\n".join(item["texts"])
@@ -182,10 +184,22 @@ async def tura_prompt_na_fassara(message, index):
     end_idx = min(index + BATCH_SIZE, len(GLOBAL_CLUSTERS))
     batch_clusters = GLOBAL_CLUSTERS[index:end_idx]
     
-    prompt = f"""Kai babban Edita ne. Fassara kowane rukuni zuwa Hausa kai tsaye. 
-Idan rukunin yana da labarai fiye da daya, narke su su zama LABARI GUDA DAYA.
-DOLA: Dole ne ka raba fassarar kowane rukuni daban-daban da wannan kalmar:
+    prompt = f"""Kai babban Edita ne. Ga rukunonin labarai guda {len(batch_clusters)} a kasa. Kowane rukuni yana da guntatakin labarai.
+Aikin ka:
+1. Narkar da guntatakin kowane rukuni su koma CIKAKKEN LABARI GUDA DAYA a turance (Cohesive English Story).
+2. Fassara wannan cikakken labarin zuwa Hausa kai tsaye.
+🚫 DOKA TA MUSAMMAN: Kada ka taba amfani ko kirkirar sunayen bogi (fake names).
+
+DOLA: Tsara amsarka kamar haka don kowane rukuni, sannan ka raba su da kalmar ===RUKUNI===:
+
+**English**
+(Cikakken labarin Turancin a nan)
+
+**Hausa**
+(Fassarar Hausar a nan)
+
 ===RUKUNI===
+
 Ga labaran:\n"""
     
     for i, cluster in enumerate(batch_clusters):
@@ -194,7 +208,7 @@ Ga labaran:\n"""
         if not stacked_raw_text.strip(): stacked_raw_text = "[WANNAN RUKUNIN HOTO NE/BIDIYO ZALLA, RUBUTA 'Babu Rubutu']"
         prompt += f"\n\n--- RUKUNI NA {index + i + 1} ---\n{stacked_raw_text}\n"
 
-    await message.reply_text(f"⏳ **MATAKI 1: ANA SHIRYA RUKUNI NA {index + 1} ZUWA {end_idx} (DAGA CIKIN {len(GLOBAL_CLUSTERS)})**\n\nKwafi wannan ka kaiwa Gemini ya fassara maka:\n👇👇👇")
+    await message.reply_text(f"⏳ **MATAKI 1: ANA SHIRYA RUKUNI NA {index + 1} ZUWA {end_idx} (DAGA CIKIN {len(GLOBAL_CLUSTERS)})**\n\nKwafi wannan ka kaiwa Gemini ya narkar da Turancin kuma ya fassara:\n👇👇👇")
     await send_long_message(message, prompt)
     await message.reply_text("👉 **Idan ka fassara duka a Gemini, lika su anan ka tura, sannan ka danna `.shigar`**")
     
@@ -241,32 +255,40 @@ async def shigar_fassara(client, message):
     expected_count = end_idx - CURRENT_INDEX
 
     if len(translations) != expected_count:
-        await message.reply_text(f"⚠️ Matsala: Ina jiran {expected_count}, na gano {len(translations)}. Ka tabbatar da ===RUKUNI=== tsakaninsu. Na goge, sake turawa.")
+        await message.reply_text(f"⚠️ Matsala: Ina jiran rukuni {expected_count}, amma na gano {len(translations)}. Ka tabbatar da kalmar ===RUKUNI=== na nan a tsakaninsu. Na goge, sake turawa.")
         CURRENT_BATCH_TEXT = ""
         return
 
     # MATAKI NA 1: Samar da Prompt din Gyaran Fuska
     if BOT_STATE == "WAITING_FASSARA_1":
-        prompt_gyara = f"""Kai kwararren masanin harshen Hausa ne. Ga fassarar wasu labarai guda {len(translations)} daga Turanci.
-Duba fassarar, gyara ta ta yadda za ta kasance cikin zallar Hausa mai dadi da santsi ba tare da sauya ma'anar asali ba.
+        prompt_gyara = f"""Kai kwararren masanin harshen Hausa ne. Ga labaran Turanci da fassararsu guda {len(translations)}.
+Aikinka shine ka duba fassarar Hausar, ka gyara ta ta koma zallar Hausa mai dadi da santsi ba tare da sauya ma'anar asali ba. Turancin kuma ka bar shi yadda yake.
+🚫 DOKA TA MUSAMMAN: Kada ka taba kirkirar sunayen bogi (fake names).
 
-DOLA: Ka raba gyaran kowane rukuni daban-daban ta hanyar saka wannan kalmar a tsakaninsu:
+DOLA: Ka tsara amsarka kamar haka don kowane rukuni:
+**English**
+(Asalin Turancin da na baka)
+
+**Hausa**
+(Gyararren fassarar Hausar a nan)
+
 ===RUKUNI===
-Ga fassarar:\n"""
+
+Ga labaran:\n"""
         for i, fassara in enumerate(translations):
             prompt_gyara += f"\n\n--- RUKUNI NA {CURRENT_INDEX + i + 1} ---\n{fassara}\n"
 
-        await message.reply_text(f"✅ An karbi Fassarar Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA):** Kwafi wannan ka kaiwa Gemini ya tace maka zuwa zallar Hausa:\n👇👇👇")
+        await message.reply_text(f"✅ An karbi Rukunin Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA):** Kwafi wannan ka kaiwa Gemini ya tace maka zuwa zallar Hausa:\n👇👇👇")
         await send_long_message(message, prompt_gyara)
-        await message.reply_text("👉 **Idan ya baka gyararren Hausar, lika anan, ka sake danna `.shigar` don a watsa.**")
+        await message.reply_text("👉 **Idan ya baka gyararren rubutun, lika anan, ka sake danna `.shigar` don a watsa.**")
         BOT_STATE = "WAITING_FASSARA_2"
         CURRENT_BATCH_TEXT = ""
         ajiye_bayanai()
         return
 
-    # MATAKI NA 2: Hada Turanci + Hausa da Turawa Queue
+    # MATAKI NA 2: Daukar Cikakken Rubutun da Turawa Queue
     elif BOT_STATE == "WAITING_FASSARA_2":
-        await message.reply_text("✅ An karbi Gyararren Hausar! Ana jera su a layin watsawa...")
+        await message.reply_text("✅ An karbi Gyararren Rubutun! Ana jera su a layin watsawa...")
 
         for i, fassara in enumerate(translations):
             cluster_idx = CURRENT_INDEX + i
@@ -275,10 +297,17 @@ Ga fassarar:\n"""
             if "babu rubutu" in fassara.lower() and len(fassara) < 50:
                 final_text = ""
             else:
-                english_texts = [TEMP_DATA[idx]["text"].strip() for idx in cluster if idx < len(TEMP_DATA) and TEMP_DATA[idx]["text"].strip()]
-                english_combined = "\n\n".join(english_texts)
+                # INJIN SAKA EMOJI DANGANE DA NAU'IN LABARI
+                has_video = any(TEMP_DATA[idx].get("has_video", False) for idx in cluster if idx < len(TEMP_DATA))
+                has_photo = any(TEMP_DATA[idx].get("has_photo", False) for idx in cluster if idx < len(TEMP_DATA))
                 
-                final_text = f"🇬🇧 **ORIGINAL TEXT:**\n{english_combined}\n\n━━━━━━━━━━━━━━━━━━━━\n\n🇳🇬 **FASSARA (HAUSA):**\n{fassara}\n\n🔗 https://t.me/yaamahdi_hausa"
+                media_icon = ""
+                if has_video:
+                    media_icon = "🎥 " # Ya fi baiwa bidiyo fifiko idan an samu duka biyun
+                elif has_photo:
+                    media_icon = "📸 "
+                    
+                final_text = f"{media_icon}{fassara.strip()}\n\n🔗 https://t.me/yaamahdi_hausa"
                 
             caption_text = ""
             remainder_text = ""
@@ -365,7 +394,7 @@ async def watsa_labarai_a_hankali():
         ajiye_bayanai()
         
         if len(TRANSLATED_QUEUE) > 0 and BOT_STATE != "PAUSED":
-            await asyncio.sleep(150) # TAZARAR MINTI 2.5
+            await asyncio.sleep(150) 
             
     BOT_STATE = "IDLE"
     IS_POSTING = False
@@ -413,7 +442,7 @@ async def goge_sakanni(client, message):
     if not cmd_text: return await message.reply_text("⚠️ Saka kalma ko kwanan wata. Misali: `.goge RUKUNI`")
     
     args = cmd_text.split()
-    if len(args) == 6: # Goge da kwanan wata
+    if len(args) == 6: 
         try:
             start_dt = datetime.strptime(f"{args[0]} {args[1]} {args[2].upper()}", "%Y-%m-%d %I:%M %p")
             end_dt = datetime.strptime(f"{args[3]} {args[4]} {args[5].upper()}", "%Y-%m-%d %I:%M %p")
@@ -423,7 +452,7 @@ async def goge_sakanni(client, message):
                     await msg.delete(); count += 1; await asyncio.sleep(0.5)
             await message.reply_text(f"✅ An goge sakonni {count}.")
         except: await message.reply_text("⚠️ Kuskuren kwanan wata.")
-    else: # Goge da Kalma
+    else: 
         count = 0
         keyword = cmd_text.lower()
         await message.reply_text(f"⏳ Ana goge sakonni masu kalmar '{keyword}'...")
