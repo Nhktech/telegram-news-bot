@@ -164,7 +164,7 @@ async def kwaso_labarai(client, message):
             rubutu_don_gemini += f"[{lamba}]: [HOTO KO BIDIYO ZALLA]\n"
             
     prompt = f"""Kai babban Edita ne. Ga gajerun kanun labarai masu lamba a kasa. 
-Hada lambobin wadanda suke magana akan abu daya.
+Hada lambobin wadanda suke magana akan abu daya ko kuma suke da alaka komin kankantarta alakar kuwa
 DOKA: Mayar da amsa a JSON OBJECT kamar haka: {{"clusters": [[0, 2], [1], [3, 4]]}}
 Kanun Labaran:\n{rubutu_don_gemini}"""
 
