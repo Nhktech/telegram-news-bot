@@ -184,21 +184,33 @@ async def tura_prompt_na_fassara(message, index):
     end_idx = min(index + BATCH_SIZE, len(GLOBAL_CLUSTERS))
     batch_clusters = GLOBAL_CLUSTERS[index:end_idx]
     
-    prompt = f"""Kai babban Edita ne. Ga rukunonin labarai guda {len(batch_clusters)} a kasa. Kowane rukuni yana da guntatakin labarai.
+    prompt = f"""Kai babban Edita ne kuma kwararren mai fassara labarai. Ga rukunonin labarai guda 10 a kasa. Kowane rukuni yana da guntatakin labarai.
+
 Aikin ka:
+
 1. Narkar da guntatakin kowane rukuni su koma CIKAKKEN LABARI GUDA DAYA a turance (Cohesive English Story).
-2. Fassara wannan cikakken labarin zuwa Hausa kai tsaye.
-🚫 DOKA TA MUSAMMAN: Kada ka taba amfani ko kirkirar sunayen bogi (fake names).
 
-DOLA: Tsara amsarka kamar haka don kowane rukuni, sannan ka raba su da kalmar ===RUKUNI===:
+2. Fassara wannan labarin daga Turanci zuwa Hausa ta hanyar yin **'fassarar ma'ana' (contextual translation)**..
 
-**English**
+3. Fitarda fassarar mai santsi da dadin karatu wadda ta dace da aikin jarida da kafafen yada labarai na zamani.
+4. KADA ka yi fassarar kalma-da-kalma (literal translation). Sake tsara ginin jimlar yadda zai dace da harshen Hausa na asali.
+5. KADA ka taba kirkira ko amfani da sunayen bogi (fake names); idan babu suna a asalin labarin, yi amfani da lafazin da ya dace.
+
+DOKA: Tsara amsarka kamar haka don kowane rukuni, sannan ka raba su da kalmar ===RUKUNI===:
+
+
+English
+
 (Cikakken labarin Turancin a nan)
 
-**Hausa**
+
+Hausa
+
 (Fassarar Hausar a nan)
 
+
 ===RUKUNI===
+
 
 Ga labaran:\n"""
     
