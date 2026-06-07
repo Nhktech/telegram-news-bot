@@ -7,6 +7,7 @@ from datetime import datetime
 from pyrogram import Client, filters
 from pyrogram.types import InputMediaPhoto, InputMediaVideo
 from pyrogram.errors import FloodWait
+from pyrogram.enums import ParseMode
 
 # ==========================================
 # SAITA BAYANANKA TA HANYAR "ENVIRONMENT VARIABLES"
@@ -22,7 +23,6 @@ except Exception as e:
 SOURCE_CHANNEL = "@PressTV"
 DEST_CHANNEL = "me"  
 
-# SABON TSARI MAI KARIYA DAGA FLOODWAIT
 app = Client(
     name="my_account", 
     session_string=SESSION_STRING, 
@@ -31,9 +31,6 @@ app = Client(
     sleep_threshold=300
 )
 
-# ==========================================
-# GAYARWA: Aikin yanka saƙon da yayi tsayi (Mai Kariyar FloodWait)
-# ==========================================
 async def send_long_message(message, text):
     if not text: 
         return
@@ -200,21 +197,14 @@ async def tura_prompt_na_fassara(message, index):
     end_idx = min(index + BATCH_SIZE, len(GLOBAL_CLUSTERS))
     batch_clusters = GLOBAL_CLUSTERS[index:end_idx]
     
-    prompt = f"""Kai babban Edita ne. Ga rukunonin labarai guda {len(batch_clusters)} a kasa. Kowane rukuni yana da guntatakin labarai.
+    prompt = f"""Kai babban Edita ne. Ga rukunonin labarai guda {len(batch_clusters)} a kasa. 
 Aikin ka:
-1. Narkar da guntatakin kowane rukuni su koma CIKAKKEN LABARI GUDA DAYA a turance (Cohesive English Story).
-2. Fassara wannan cikakken labarin zuwa Hausa kai tsaye.
-🚫 DOKA TA MUSAMMAN: Kada ka taba amfani ko kirkirar sunayen bogi (fake names).
+1. Idan rukunin yana da guntatakin labarai fiye da daya, ka narke su gaba daya.
+2. Ka fassara labarin kai tsaye zuwa Hausa.
+🚫 DOKA 1: BAN BUKATAR KA DAWO MIN DA TURANCIN. Fassarar Hausar ZALLA nake so ka bayar.
+🚫 DOKA 2: Kada ka taba amfani ko kirkirar sunayen bogi (fake names).
 
-DOLA: Tsara amsarka kamar haka don kowane rukuni, sannan ka raba su da kalmar ===RUKUNI===:
-
-**English**
-(Cikakken labarin Turancin a nan)
-
-**Hausa**
-(Fassarar Hausar a nan)
-
-===RUKUNI===
+DOLA: Ka raba fassarar Hausar kowane rukuni da kalmar ===RUKUNI===
 
 Ga labaran:\n"""
     
@@ -224,7 +214,7 @@ Ga labaran:\n"""
         if not stacked_raw_text.strip(): stacked_raw_text = "[WANNAN RUKUNIN HOTO NE/BIDIYO ZALLA, RUBUTA 'Babu Rubutu']"
         prompt += f"\n\n--- RUKUNI NA {index + i + 1} ---\n{stacked_raw_text}\n"
 
-    await message.reply_text(f"⏳ **MATAKI 1: ANA SHIRYA RUKUNI NA {index + 1} ZUWA {end_idx} (DAGA CIKIN {len(GLOBAL_CLUSTERS)})**\n\nKwafi wannan ka kaiwa Gemini ya narkar da Turancin kuma ya fassara:\n👇👇👇")
+    await message.reply_text(f"⏳ **MATAKI 1: ANA SHIRYA RUKUNI NA {index + 1} ZUWA {end_idx} (DAGA CIKIN {len(GLOBAL_CLUSTERS)})**\n\nKwafi wannan ka kaiwa Gemini ya fassara zuwa Hausa:\n👇👇👇")
     await send_long_message(message, prompt)
     await message.reply_text("👉 **Idan ka fassara duka a Gemini, lika su anan ka tura, sannan ka danna `.shigar`**")
     
@@ -276,24 +266,18 @@ async def shigar_fassara(client, message):
         return
 
     if BOT_STATE == "WAITING_FASSARA_1":
-        prompt_gyara = f"""Kai kwararren masanin harshen Hausa ne. Ga labaran Turanci da fassararsu guda {len(translations)}.
-Aikinka shine ka duba fassarar Hausar, ka gyara ta ta koma zallar Hausa mai dadi da santsi ba tare da sauya ma'anar asali ba. Turancin kuma ka bar shi yadda yake.
-🚫 DOKA TA MUSAMMAN: Kada ka taba kirkirar sunayen bogi (fake names).
+        prompt_gyara = f"""Kai kwararren masanin harshen Hausa ne. Ga fassarar wasu labarai guda {len(translations)}.
+Aikinka shine ka gyara fassarar ta koma zallar Hausa mai dadi da santsi ba tare da sauya ma'anar asali ba.
+TSARI: Ka bayar da sarari (space) mai kyau tsakanin sakin layi. Ka yi amfani da BOLD (**rubutu**) a kan muhimman sunaye.
+🚫 DOKA: Kada ka kirkiri sunayen bogi.
 
-DOLA: Ka tsara amsarka kamar haka don kowane rukuni:
-**English**
-(Asalin Turancin da na baka)
+DOLA: Raba gyaran kowane rukuni da kalmar ===RUKUNI===
 
-**Hausa**
-(Gyararren fassarar Hausar a nan)
-
-===RUKUNI===
-
-Ga labaran:\n"""
+Ga fassarar:\n"""
         for i, fassara in enumerate(translations):
             prompt_gyara += f"\n\n--- RUKUNI NA {CURRENT_INDEX + i + 1} ---\n{fassara}\n"
 
-        await message.reply_text(f"✅ An karbi Rukunin Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA):** Kwafi wannan ka kaiwa Gemini ya tace maka zuwa zallar Hausa:\n👇👇👇")
+        await message.reply_text(f"✅ An karbi Rukunin Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA):** Kwafi wannan ka kaiwa Gemini ya tace maka shi da kyau:\n👇👇👇")
         await send_long_message(message, prompt_gyara)
         await message.reply_text("👉 **Idan ya baka gyararren rubutun, lika anan, ka sake danna `.shigar` don a watsa.**")
         BOT_STATE = "WAITING_FASSARA_2"
@@ -320,7 +304,17 @@ Ga labaran:\n"""
                 elif has_photo:
                     media_icon = "📸 "
                     
-                final_text = f"{media_icon}{fassara.strip()}\n\n🔗 https://t.me/yaamahdi_hausa"
+                english_texts = [TEMP_DATA[idx]["text"].strip() for idx in cluster if idx < len(TEMP_DATA) and TEMP_DATA[idx]["text"].strip()]
+                english_combined = "\n\n".join(english_texts)
+                
+                final_text = (
+                    f"{media_icon}**🇬🇧 ORIGINAL TEXT:**\n"
+                    f"{english_combined}\n\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"**🇳🇬 FASSARAR HAUSA:**\n"
+                    f"{fassara.strip()}\n\n"
+                    f"🔗 https://t.me/yaamahdi_hausa"
+                )
                 
             caption_text = ""
             remainder_text = ""
@@ -356,7 +350,7 @@ Ga labaran:\n"""
             if not IS_POSTING: app.loop.create_task(watsa_labarai_a_hankali())
 
 # ==========================================
-# 4. INJIN WATSAWA (Minti 2.5 = 150s) & KARIYA
+# 4. INJIN WATSAWA DA SABON TSARIN "FALLBACK"
 # ==========================================
 async def watsa_labarai_a_hankali():
     global TRANSLATED_QUEUE, BOT_STATE, IS_POSTING
@@ -377,9 +371,9 @@ async def watsa_labarai_a_hankali():
             try:
                 fetched = await app.get_messages(SOURCE_CHANNEL, media_ids)
                 if not isinstance(fetched, list): fetched = [fetched]
-                combined_media = fetched
+                combined_media = [m for m in fetched if m and not m.empty]
             except Exception as e:
-                print(f"⚠️ Kuskuren kwaso media daga asali: {e}")
+                print(f"⚠️ Kuskuren kwaso media: {e}")
             
         try:
             if not combined_media:
@@ -394,18 +388,47 @@ async def watsa_labarai_a_hankali():
                     await asyncio.sleep(2.5)
                     await send_long_message(message=None, text=remainder)
             else:
-                media_group = [InputMediaPhoto(m.photo.file_id, caption=caption if i==0 else "") if m.photo else InputMediaVideo(m.video.file_id, caption=caption if i==0 else "") for i, m in enumerate(combined_media)]
-                if media_group: await app.send_media_group(TARGET_CHANNEL, media_group)
+                media_group = []
+                for i, m in enumerate(combined_media):
+                    cap = caption if i == 0 else ""
+                    if m.photo:
+                        media_group.append(InputMediaPhoto(m.photo.file_id, caption=cap))
+                    elif m.video:
+                        media_group.append(InputMediaVideo(m.video.file_id, caption=cap))
+
+                if media_group:
+                    await app.send_media_group(TARGET_CHANNEL, media_group)
+                else:
+                    if caption: await app.send_message(TARGET_CHANNEL, caption)
+
                 if remainder:
                     await asyncio.sleep(2.5)
                     await send_long_message(message=None, text=remainder)
+                    
         except FloodWait as e:
             print(f"⏳ FloodWait wajen watsawa! Jira na daƙiƙa {e.value}")
             await asyncio.sleep(e.value + 2)
             continue 
+            
         except Exception as e:
-            print(f"⚠️ Kuskuren tura labari: {e}")
+            # ========================================================
+            # SABON TSARIN KARIYA: IDAN ABIN YA KASA (FALLBACK)
+            # Zai kashe tsarin Markdown ya tura rubutu zalla
+            # ========================================================
+            print(f"⚠️ Kuskuren watsa labari (Zan gwada tura rubutu zalla): {e}")
+            try:
+                if caption:
+                    await app.send_message(TARGET_CHANNEL, f"⚠️ [Babu Media - Matsalar Tsari]\n\n{caption}", parse_mode=ParseMode.DISABLED)
+                if remainder:
+                    await asyncio.sleep(2.5)
+                    for i in range(0, len(remainder), 4000):
+                        await app.send_message(TARGET_CHANNEL, remainder[i:i+4000], parse_mode=ParseMode.DISABLED)
+                        await asyncio.sleep(2)
+            except Exception as e2:
+                # Idan wannan ma yaki shiga, a kalla za a sanar da kai a inda kake
+                await app.send_message(DEST_CHANNEL, f"❌ Wani labari ya ki shiga gaba daya!\nDalili: {str(e)[:100]}")
 
+        # Goge labarin koda yayi nasara ko a'a don kada ya makale
         TRANSLATED_QUEUE.pop(0)
         ajiye_bayanai()
         
