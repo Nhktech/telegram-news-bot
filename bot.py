@@ -139,9 +139,12 @@ async def kwaso_labarai(client, message):
     media_groups = {}
     for msg in messages_in_range:
         text = msg.text or msg.caption or ""
+        # Dauko lokacin da aka dora labarin
+        msg_date_str = msg.date.strftime("%Y-%m-%d %I:%M %p")
+        
         if msg.media_group_id:
             if msg.media_group_id not in media_groups:
-                new_item = {"texts": [], "media_ids": [], "has_video": False, "has_photo": False}
+                new_item = {"texts": [], "media_ids": [], "has_video": False, "has_photo": False, "date": msg_date_str}
                 media_groups[msg.media_group_id] = new_item
                 raw_items.append(new_item) 
             group = media_groups[msg.media_group_id]
@@ -154,11 +157,17 @@ async def kwaso_labarai(client, message):
                 "texts": [text] if text else [], 
                 "media_ids": [msg.id] if msg.media else [],
                 "has_video": bool(msg.video),
-                "has_photo": bool(msg.photo)
+                "has_photo": bool(msg.photo),
+                "date": msg_date_str
             })
             
     for item in raw_items:
-        item["text"] = "\n\n".join(item["texts"])
+        joined_texts = "\n\n".join(item["texts"])
+        # Sanya ranar da lokaci a saman kowane labari don Gemini ya gani
+        if joined_texts.strip():
+            item["text"] = f"🗓 LOKACI: {item['date']}\n{joined_texts}"
+        else:
+            item["text"] = f"🗓 LOKACI: {item['date']}\n[HOTO KO BIDIYO ZALLA]"
 
     TEMP_DATA = raw_items 
     GLOBAL_CLUSTERS = []
@@ -169,15 +178,15 @@ async def kwaso_labarai(client, message):
     
     rubutu_don_gemini = ""
     for lamba, labari in enumerate(raw_items):
-        txt = str(labari["text"]).strip()
-        if txt:
+        txt = str(labari["text"]).replace(f"🗓 LOKACI: {labari['date']}\n", "").strip()
+        if txt and txt != "[HOTO KO BIDIYO ZALLA]":
             gajeren_labari = " ".join(txt.split()[:30])
-            rubutu_don_gemini += f"[{lamba}]: {gajeren_labari}...\n"
+            rubutu_don_gemini += f"[{lamba}] (Aka wallafa: {labari['date']}): {gajeren_labari}...\n"
         else:
-            rubutu_don_gemini += f"[{lamba}]: [HOTO KO BIDIYO ZALLA]\n"
+            rubutu_don_gemini += f"[{lamba}] (Aka wallafa: {labari['date']}): [HOTO KO BIDIYO ZALLA]\n"
             
-    prompt = f"""Kai babban Edita ne. Ga gajerun kanun labarai masu lamba a kasa. 
-Hada lambobin wadanda suke magana akan abu daya.
+    prompt = f"""Kai babban Edita ne. Ga gajerun kanun labarai masu lamba a kasa. Kowane labari yana dauke da lokacin da aka wallafa shi.
+Hada lambobin wadanda suke magana akan abu daya ta amfani da hankali da kuma kwanan wata.
 DOKA: Mayar da amsa a JSON OBJECT kamar haka: {{"clusters": [[0, 2], [1], [3, 4]]}}
 Kanun Labaran:\n{rubutu_don_gemini}"""
 
@@ -199,8 +208,8 @@ async def tura_prompt_na_fassara(message, index):
     
     prompt = f"""Kai babban Edita ne. Ga rukunonin labarai guda {len(batch_clusters)} a kasa. 
 Aikin ka:
-1. Idan rukunin yana da guntatakin labarai fiye da daya, KA NARKE SU GUDANAR DA CIKAKKEN LABARI GUDA DAYA a turance ba gutsure-gutsure ba.
-2. Ka kawo wannan narkarren Turancin a sama sannan ka kawo fassarar Hausa a kasa.
+1. Idan rukunin yana da guntatakin labarai fiye da daya, KA NARKE SU GUDANAR DA CIKAKKEN LABARI GUDA DAYA a turance ba gutsure-gutsure ba. Ka yi amfani da lokutan da aka sa masu (LOKACI) don gane jerin yadda abin ya faru (timeline) idan ya zama dole.
+2. Ka kawo wannan narkarren Turancin a sama sannan ka kawo fassarar Hausa a kasa. (Kada ka sa kwanan wata ko lokaci a cikin fassarar sai idan ya dace da lafazin labarin).
 🚫 DOKA: Kada ka kirkiri sunayen bogi (fake names).
 
 DOLA: Ka tsara amsarka kamar haka don kowane rukuni:
