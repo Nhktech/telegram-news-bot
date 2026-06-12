@@ -139,7 +139,6 @@ async def kwaso_labarai(client, message):
     media_groups = {}
     for msg in messages_in_range:
         text = msg.text or msg.caption or ""
-        # Dauko lokacin da aka dora labarin
         msg_date_str = msg.date.strftime("%Y-%m-%d %I:%M %p")
         
         if msg.media_group_id:
@@ -163,7 +162,6 @@ async def kwaso_labarai(client, message):
             
     for item in raw_items:
         joined_texts = "\n\n".join(item["texts"])
-        # Sanya ranar da lokaci a saman kowane labari don Gemini ya gani
         if joined_texts.strip():
             item["text"] = f"🗓 LOKACI: {item['date']}\n{joined_texts}"
         else:
@@ -185,7 +183,7 @@ async def kwaso_labarai(client, message):
         else:
             rubutu_don_gemini += f"[{lamba}] (Aka wallafa: {labari['date']}): [HOTO KO BIDIYO ZALLA]\n"
             
-    prompt = f"""Kai babban Edita ne. Ga gajerun kanun labarai masu lamba a kasa. Kowane labari yana dauke da lokacin da aka wallafa shi.
+    prompt = f"""Kai babban Edita ne. Ga gajerun kanun labarai masu lamba a kasa. 
 Hada lambobin wadanda suke magana akan abu daya ta amfani da hankali da kuma kwanan wata.
 DOKA: Mayar da amsa a JSON OBJECT kamar haka: {{"clusters": [[0, 2], [1], [3, 4]]}}
 Kanun Labaran:\n{rubutu_don_gemini}"""
@@ -208,19 +206,20 @@ async def tura_prompt_na_fassara(message, index):
     
     prompt = f"""Kai babban Edita ne. Ga rukunonin labarai guda {len(batch_clusters)} a kasa. 
 Aikin ka:
-1. Idan rukunin yana da guntatakin labarai fiye da daya, KA NARKE SU GUDANAR DA CIKAKKEN LABARI GUDA DAYA a turance ba gutsure-gutsure ba. Ka yi amfani da lokutan da aka sa masu (LOKACI) don gane jerin yadda abin ya faru (timeline) idan ya zama dole.
-2. Ka kawo wannan narkarren Turancin a sama sannan ka kawo fassarar Hausa a kasa. (Kada ka sa kwanan wata ko lokaci a cikin fassarar sai idan ya dace da lafazin labarin).
+1. Idan rukunin yana da guntatakin labarai fiye da daya, KA NARKE SU GUDANAR DA CIKAKKEN LABARI GUDA DAYA a turance ba gutsure-gutsure ba. 
+2. Ka kawo wannan narkarren Turancin a sama sannan ka kawo fassarar Hausa a kasa. 
 🚫 DOKA: Kada ka kirkiri sunayen bogi (fake names).
 
-DOLA: Ka tsara amsarka kamar haka don kowane rukuni:
+DOLA TA MUSAMMAN: Dole ne ka rufe amsar kowane rukuni a cikin Tag na <LABARI> da </LABARI>.
 
+Misali na yadda zaka tsara amsarka:
+<LABARI>
 **English**
 (Cikakken labarin Turancin da ka narke anan)
 
 **Hausa**
 (Fassarar Hausar anan)
-
-===RUKUNI===
+</LABARI>
 
 Ga labaran:\n"""
     
@@ -232,13 +231,13 @@ Ga labaran:\n"""
 
     await message.reply_text(f"⏳ **MATAKI 1: ANA SHIRYA RUKUNI NA {index + 1} ZUWA {end_idx} (DAGA CIKIN {len(GLOBAL_CLUSTERS)})**\n\nKwafi wannan ka kaiwa Gemini:\n👇👇👇")
     await send_long_message(message, prompt)
-    await message.reply_text("👉 **Idan ka fassara duka a Gemini, lika su anan ka tura, sannan ka danna `.shigar`**")
+    await message.reply_text("👉 **Idan ka fassara a Gemini, lika a nan ka danna `.shigar`**")
     
     BOT_STATE = "WAITING_FASSARA_1"
     ajiye_bayanai()
 
 # ==========================================
-# 3. LURA DA SAKONNINKA DA .shigar (MAI SASSAUCI)
+# 3. LURA DA SAKONNINKA DA .shigar (MAI SASSAUCI & XML TAGS)
 # ==========================================
 @app.on_message(filters.me & ~filters.regex(r"^\."))
 async def saurare_rubutu(client, message):
@@ -272,46 +271,51 @@ async def shigar_fassara(client, message):
     if BOT_STATE not in ["WAITING_FASSARA_1", "WAITING_FASSARA_2"]: return
     if not CURRENT_BATCH_TEXT.strip(): return await message.reply_text("⚠️ Babu rubutu tukunna.")
 
-    translations = [t.strip() for t in re.split(r'===RUKUNI===', CURRENT_BATCH_TEXT, flags=re.IGNORECASE) if t.strip()]
+    raw_translations = re.findall(r'<LABARI>(.*?)</LABARI>', CURRENT_BATCH_TEXT, flags=re.IGNORECASE | re.DOTALL)
+    translations = [t.strip() for t in raw_translations if t.strip()]
     
-    # MATAKI NA 1: Samar da Prompt din Gyaran Fuska (Tsayayye)
     if BOT_STATE == "WAITING_FASSARA_1":
         expected_count = min(CURRENT_INDEX + BATCH_SIZE, len(GLOBAL_CLUSTERS)) - CURRENT_INDEX
         if len(translations) != expected_count:
-            await message.reply_text(f"⚠️ Matsala a Mataki na 1: Ina jiran rukuni {expected_count}, amma na gano {len(translations)}.\nKa tabbatar da kalmar ===RUKUNI=== na nan a tsakaninsu. Na goge, sake turawa gaba daya.")
+            await message.reply_text(f"⚠️ Matsala a Mataki na 1: Ina jiran <LABARI> guda {expected_count}, amma na gano guda {len(translations)} kacal.\nKa tabbatar Gemini ya sa <LABARI> da </LABARI>. Na goge na yanzu, sake turawa.")
             CURRENT_BATCH_TEXT = ""
             return
 
-        prompt_gyara = f"""Kai kwararren dan jarida ne, mai gabatar da labarai ga al'umma. Ga fassarar wasu labarai guda {len(translations)}.
-Aikinka shine ka cire duk wani kamshin "fassarar na'ura" (robotic translation) daga wannan Hausar. Bar Turancin yadda yake a narke.
+        # ========================================================
+        # SABON SALON ZALLAR RUBUTU (TEXT-BASED JOURNALISM)
+        # ========================================================
+        prompt_gyara = f"""Kai kwararren marubucin jarida ne kuma marubucin labarai a shafukan yanar gizo. Ga fassarar wasu labarai guda {len(translations)}.
+Aikinka shine ka cire duk wani kamshin "fassarar na'ura" daga wannan Hausar, ka mayar da shi RUBUTACCEN LABARI wanda zai rike hankalin masu karatu. Bar Turancin yadda yake a narke.
 
-🌟 SALON RUBUTU (TONE): Ka sake tsara Hausar ta koma mai raye (dynamic). Ka yi amfani da salo mai jan hankali inda mai karatu zai ji labarin yana yi masa magana kai tsaye (conversational and engaging). Zaka iya amfani da salo kamar (Shin kun san... / A wani sabon al'amari... da sauransu) idan ya dace.
-✨ TSARI: Ka bayar da sarari mai kyau tsakanin sakin layi. Ka yi amfani da BOLD (**rubutu**) a kan muhimman sunaye.
-🚫 DOKA: Kada ka kirkiri sunayen bogi.
+🌟 SALON RUBUTU (READING TONE): 
+Tunda labarin A RUBUCE yake, dole ne ka tsara shi don masu karatu (readers). Ka yi amfani da jimloli masu jan hankali irin su: "Jama'a...", "Shin kun ci karo da...", "Wani abin al'ajabi...", "Ku karanta ku ga...", "Ba za ku yarda da wannan ba...". 
+🚫 DOKA TA MUSAMMAN: Kada ka yi amfani da kalaman masu yin magana a baki, rediyo ko bidiyo (kamar 'ku saurari wannan', ko 'masu kallo'). Ka sani cewa KAWAR da wannan zai tabbatar labarin ya dace da masu karatu a Telegram. 
+✨ TSARI: Ka bayar da sarari mai kyau tsakanin sakin layi don gamsar da masu karatu. Ka yi amfani da BOLD (**rubutu**) a kan muhimman sunaye.
 
-DOLA: Ka tsara amsarka kamar haka don kowane rukuni:
+DOLA TA MUSAMMAN: Dole ne ka rufe gyaran kowane rukuni a cikin Tag na <LABARI> da </LABARI>.
 
+Misali:
+<LABARI>
 **English**
 (Turancin da na baka)
 
 **Hausa**
-(Gyararren fassarar Hausar mai jan ra'ayi a nan)
+(Gyararren fassarar Hausar don masu karatu a nan)
+</LABARI>
 
-===RUKUNI===
-
-Ga labaran:\n"""
+Ga fassarar:\n"""
         for i, fassara in enumerate(translations):
             prompt_gyara += f"\n\n--- RUKUNI NA {CURRENT_INDEX + i + 1} ---\n{fassara}\n"
 
-        await message.reply_text(f"✅ An karbi Rukunin Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA):** Kwafi wannan ka kaiwa Gemini ya farfado da labarin:\n👇👇👇")
+        await message.reply_text(f"✅ An karbi Rukunin Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA DON MASU KARATU):** Kwafi wannan ka kaiwa Gemini:\n👇👇👇")
         await send_long_message(message, prompt_gyara)
-        await message.reply_text("👉 **ZABI YANA HANNUNKA YANZU:** Zaka iya turo gyararren rubutun daya-bayan-daya, ko bibbiyu, ko gaba daya sannan ka danna `.shigar` don a watsa.")
+        await message.reply_text("👉 **ZABI YANA HANNUNKA:** Turo gyararren rubutun (wanda ke cikin <LABARI>...</LABARI>) daya-bayan-daya, ko gaba daya sannan ka danna `.shigar`")
         BOT_STATE = "WAITING_FASSARA_2"
         CURRENT_BATCH_TEXT = ""
         ajiye_bayanai()
         return
 
-    # MATAKI NA 2: TSARA RUBUTUN KARSHE (MAI SASSAUCI)
+    # MATAKI NA 2: TSARA RUBUTUN KARSHE
     elif BOT_STATE == "WAITING_FASSARA_2":
         received_count = len(translations)
         batch_end_idx = min((CURRENT_INDEX // BATCH_SIZE) * BATCH_SIZE + BATCH_SIZE, len(GLOBAL_CLUSTERS))
@@ -319,6 +323,11 @@ Ga labaran:\n"""
 
         if received_count > remaining_in_batch:
             await message.reply_text(f"⚠️ Kuskure: Ka turo labarai guda {received_count} alhali guda {remaining_in_batch} kacal suka rage a wannan rukunin. Na goge, sake turo daidai.")
+            CURRENT_BATCH_TEXT = ""
+            return
+            
+        if received_count == 0:
+            await message.reply_text("⚠️ Ban gano wani labari a cikin <LABARI>...</LABARI> ba. Tabbatar Gemini ya sa wannan alamar. Na goge, sake turawa.")
             CURRENT_BATCH_TEXT = ""
             return
 
@@ -364,7 +373,7 @@ Ga labaran:\n"""
                 "media_ids": combined_media_ids
             })
             
-            CURRENT_INDEX += 1 # Matsar da Injin gaba daya bayan daya
+            CURRENT_INDEX += 1 
 
         CURRENT_BATCH_TEXT = ""
         ajiye_bayanai()
