@@ -61,6 +61,9 @@ TRANSLATED_QUEUE = []
 LAST_FETCH_TIME = None 
 IS_POSTING = False 
 
+# SABON RUKUNI DON TSARIN ZABEN LABARAI DA KAI (MANUAL)
+MANUAL_MEDIA_CACHE = []
+
 STATE_FILE = "bot_state.json"
 
 def ajiye_bayanai():
@@ -72,12 +75,13 @@ def ajiye_bayanai():
                 "CURRENT_INDEX": CURRENT_INDEX,
                 "BOT_STATE": BOT_STATE,
                 "TRANSLATED_QUEUE": TRANSLATED_QUEUE,
-                "LAST_FETCH_TIME": LAST_FETCH_TIME
+                "LAST_FETCH_TIME": LAST_FETCH_TIME,
+                "MANUAL_MEDIA_CACHE": MANUAL_MEDIA_CACHE # An kara wannan don sabon tsarin
             }, f)
     except: pass
 
 def dauko_bayanai():
-    global TEMP_DATA, GLOBAL_CLUSTERS, CURRENT_INDEX, BOT_STATE, TRANSLATED_QUEUE, LAST_FETCH_TIME
+    global TEMP_DATA, GLOBAL_CLUSTERS, CURRENT_INDEX, BOT_STATE, TRANSLATED_QUEUE, LAST_FETCH_TIME, MANUAL_MEDIA_CACHE
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, "r") as f:
@@ -88,12 +92,13 @@ def dauko_bayanai():
                 BOT_STATE = data.get("BOT_STATE", "IDLE")
                 TRANSLATED_QUEUE = data.get("TRANSLATED_QUEUE", [])
                 LAST_FETCH_TIME = data.get("LAST_FETCH_TIME", None)
+                MANUAL_MEDIA_CACHE = data.get("MANUAL_MEDIA_CACHE", []) # An kara wannan
                 return True
         except: pass
     return False
 
 # ==========================================
-# 1. UMARNIN .kwaso
+# 1. UMARNIN .kwaso (TSOHON TSARI)
 # ==========================================
 @app.on_message(filters.me & filters.command("kwaso", prefixes="."))
 async def kwaso_labarai(client, message):
@@ -196,7 +201,7 @@ Kanun Labaran:\n{rubutu_don_gemini}"""
     ajiye_bayanai() 
 
 # ==========================================
-# 2. INJIN BADA PROMPT NA FASSARA (SABON SALO)
+# 2. INJIN BADA PROMPT NA FASSARA (TSOHON TSARI)
 # ==========================================
 async def tura_prompt_na_fassara(message, index):
     global TEMP_DATA, GLOBAL_CLUSTERS, BOT_STATE, BATCH_SIZE
@@ -238,7 +243,7 @@ Ga labaran:\n"""
     ajiye_bayanai()
 
 # ==========================================
-# 3. LURA DA SAKONNINKA DA .shigar (MAI SASSAUCI BA TARE DA JIRA BA)
+# 3. LURA DA SAKONNINKA DA .shigar (TSOHON TSARI)
 # ==========================================
 @app.on_message(filters.me & ~filters.regex(r"^\."))
 async def saurare_rubutu(client, message):
@@ -272,7 +277,6 @@ async def shigar_fassara(client, message):
     if BOT_STATE not in ["WAITING_FASSARA_1", "WAITING_FASSARA_2"]: return
     if not CURRENT_BATCH_TEXT.strip(): return await message.reply_text("⚠️ Babu rubutu tukunna.")
 
-    # Sassauci a gano Tag din: Zai gano <LABARI>, <RUKUNI>, <FASSARA>, da sauransu
     raw_translations = re.findall(r'<(?:LABARI|RUKUNI|FASSARA|TEXT|LABARAI)>(.*?)</(?:LABARI|RUKUNI|FASSARA|TEXT|LABARAI)>', CURRENT_BATCH_TEXT, flags=re.IGNORECASE | re.DOTALL)
     translations = [t.strip() for t in raw_translations if t.strip()]
     
@@ -287,50 +291,40 @@ async def shigar_fassara(client, message):
 Aikinka shine ka inganta "fassarar na'ura" daga wannan Hausar, ka mayar da ita mai dadin karatu ta yadda Bahaushe zai ji daɗin karatun ta sumul har ya dauka da hausa aka rubuta asalin rubutun wanda zai rike hankalin masu karatu. Bar Turancin yadda yake a narke.
 
 🌟 SALON RUBUTU (READING TONE) Ya zama Dynamic Conversational and Engaging ta yadda mai karatu zaya ji dashi ake:
-Tunda labarin A RUBUCE zai je ga masu karatu (readers), dole ne ka tsara shi don su. Ka yi amfani da jimloli masu jan hankali da zasuja hankalin masu karatu kamar "Mai Karatu..." Da sauran su.
-🚫 DOKA 1: Kada ka yi amfani da kalaman masu yin magana a rediyo ko bidiyo (kamar 'ku saurari wannan', ko 'masu kallo').
-🚫 DOKA 2: Kula da tsarin LOKACI (Timeline). Kada ka canja lafazin lokacin da abubuwan suka faru; tsohon abu ya kasance a matsayin tarihi, sabon abu ya kasance a matsayin yanzu.
+🚫 DOKA 1: Kada ka yi amfani da kalaman masu yin magana a rediyo ko bidiyo.
+🚫 DOKA 2: Kula da tsarin LOKACI (Timeline).
 ✨ TSARI: Ka bayar da sarari mai kyau tsakanin sakin layi don gamsar da masu karatu. Ka yi amfani da BOLD (**rubutu**) a kan muhimman sunaye.
 
 DOLA TA MUSAMMAN: Dole ne ka rufe gyaran kowane labari a cikin Tag na <LABARI> da </LABARI>.
-Misali:
-<LABARI>
-**English**
-(Turancin da na baka)
-**Hausa**
-(Gyararren fassarar Hausar don masu karatu a nan)
-</LABARI>
 
 Ga fassarar:\n"""
         for i, fassara in enumerate(translations):
             prompt_gyara += f"\n\n--- RUKUNI NA {CURRENT_INDEX + i + 1} ---\n{fassara}\n"
 
-        await message.reply_text(f"✅ An karbi Rukunin Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA DA INGANTA ZALLAR HAUSA):** Kwafi wannan ka kaiwa Gemini:\n👇👇👇")
+        await message.reply_text(f"✅ An karbi Rukunin Farko! \n\n⏳ **MATAKI 2 (GYARAN FUSKA):** Kwafi wannan ka kaiwa Gemini:\n👇👇👇")
         await send_long_message(message, prompt_gyara)
-        await message.reply_text("👉 **ZABI YANA HANNUNKA YANZU:** Zaka iya turo gyararren rubutun ko daya kacal ne, zai tafi layin watsawa kai tsaye ba tare da ya jira sauran ba! Danna `.shigar` duk sanda ka turo.")
+        await message.reply_text("👉 **ZABI YANA HANNUNKA YANZU:** Zaka iya turo gyararren rubutun ko daya kacal ne, zai tafi layin watsawa. Danna `.shigar` duk sanda ka turo.")
         BOT_STATE = "WAITING_FASSARA_2"
         CURRENT_BATCH_TEXT = ""
         ajiye_bayanai()
         return
 
-    # MATAKI NA 2: TSARA RUBUTUN KARSHE (DA TURAWA KAI TSAYE)
     elif BOT_STATE == "WAITING_FASSARA_2":
         received_count = len(translations)
         batch_end_idx = min((CURRENT_INDEX // BATCH_SIZE) * BATCH_SIZE + BATCH_SIZE, len(GLOBAL_CLUSTERS))
         remaining_in_batch = batch_end_idx - CURRENT_INDEX
 
         if received_count > remaining_in_batch:
-            await message.reply_text(f"⚠️ Kuskure: Ka turo labarai guda {received_count} alhali guda {remaining_in_batch} kacal suka rage a wannan rukunin. Na goge, sake turo daidai.")
+            await message.reply_text(f"⚠️ Kuskure: Ka turo labarai guda {received_count} alhali guda {remaining_in_batch} kacal suka rage. Na goge, sake turo.")
             CURRENT_BATCH_TEXT = ""
             return
             
         if received_count == 0:
-            await message.reply_text("⚠️ Ban gano wani labari a cikin <LABARI>...</LABARI> ba. Tabbatar Gemini ya sa wannan alamar. Na goge, sake turawa.")
+            await message.reply_text("⚠️ Ban gano wani labari a cikin <LABARI>...</LABARI> ba. Tabbatar Gemini ya sa alamar.")
             CURRENT_BATCH_TEXT = ""
             return
 
-        # Wannan zai nuna maka cewa ya riga ya dauki wanda ka tura ya ajiye shi don watsawa nan take
-        await message.reply_text(f"✅ An karbi Gyararren Rubutu guda {received_count}! An saka shi a layin watsawa zuwa tasharka kai tsaye...")
+        await message.reply_text(f"✅ An karbi Gyararren Rubutu guda {received_count}! An saka shi a layin watsawa...")
 
         for fassara in translations:
             cluster_idx = CURRENT_INDEX
@@ -341,12 +335,7 @@ Ga fassarar:\n"""
             else:
                 has_video = any(TEMP_DATA[idx].get("has_video", False) for idx in cluster if idx < len(TEMP_DATA))
                 has_photo = any(TEMP_DATA[idx].get("has_photo", False) for idx in cluster if idx < len(TEMP_DATA))
-                
-                media_icon = ""
-                if has_video:
-                    media_icon = "🎥 "
-                elif has_photo:
-                    media_icon = "📸 "
+                media_icon = "🎥 " if has_video else ("📸 " if has_photo else "")
                 
                 final_text = (
                     f"{media_icon}{fassara.strip()}\n\n"
@@ -377,20 +366,19 @@ Ga fassarar:\n"""
         CURRENT_BATCH_TEXT = ""
         ajiye_bayanai()
 
-        # Tayar da Injin Watsawa idan baya aiki (Wannan zai sa wanda ka tura ya fita nan take)
         if not IS_POSTING: app.loop.create_task(watsa_labarai_a_hankali())
 
         if CURRENT_INDEX == len(GLOBAL_CLUSTERS):
             BOT_STATE = "POSTING"
             ajiye_bayanai()
-            await message.reply_text(f"🎉 **AN KAMMALA SHIGAR DA DUKKAN RUKUNIN!**\nInjin zai ci gaba da watsa su a asirce har ya gama.")
+            await message.reply_text(f"🎉 **AN KAMMALA SHIGAR DA DUKKAN RUKUNIN!**")
         elif CURRENT_INDEX % BATCH_SIZE == 0:
             await message.reply_text("✅ **An gama wannan rukunin.** Ana shigo da rukunin gaba...")
             await asyncio.sleep(2)
             await tura_prompt_na_fassara(message, CURRENT_INDEX)
         else:
             rem = batch_end_idx - CURRENT_INDEX
-            await message.reply_text(f"⏳ **Akwai sauran labarai {rem} da suka rage a hannunka na wannan rukunin.**\nZaka iya ci gaba da kawo su daya-bayan-daya.")
+            await message.reply_text(f"⏳ **Akwai sauran labarai {rem} da suka rage a hannunka na wannan rukunin.**")
 
 # ==========================================
 # 4. INJIN WATSAWA DA SABON TSARIN "FALLBACK"
@@ -454,7 +442,6 @@ async def watsa_labarai_a_hankali():
             continue 
             
         except Exception as e:
-            print(f"⚠️ Kuskuren watsa labari (Zan gwada tura rubutu zalla): {e}")
             try:
                 if caption:
                     await app.send_message(TARGET_CHANNEL, f"⚠️ [Babu Media - Matsalar Tsari]\n\n{caption}", parse_mode=ParseMode.DISABLED)
@@ -469,7 +456,6 @@ async def watsa_labarai_a_hankali():
         TRANSLATED_QUEUE.pop(0)
         ajiye_bayanai()
         
-        # Jinkiri tsakanin watsa labari don gujewa FloodWait
         if len(TRANSLATED_QUEUE) > 0 and BOT_STATE != "PAUSED":
             await asyncio.sleep(150) 
             
@@ -478,8 +464,109 @@ async def watsa_labarai_a_hankali():
     ajiye_bayanai()
     await app.send_message(DEST_CHANNEL, f"🎊 **AIKI YA KAMMALA DUKANTA!** An watsa komai a tasharka.")
 
+
 # ==========================================
-# 5. UMARNI MASU SAUKI (.dakata, .cigaba, .goge, .fasa)
+# 5. SABON TSARI NA ZABEN LABARAI DA KAI (.nagama da .watsa)
+# ==========================================
+@app.on_message(filters.me & filters.command("nagama", prefixes="."))
+async def manual_nagama(client, message):
+    global MANUAL_MEDIA_CACHE
+    extracted_texts = []
+    media_ids = []
+    
+    # Duba sakonni 20 na baya a cikin "Saved Messages"
+    async for msg in app.get_chat_history("me", limit=20):
+        if msg.id == message.id: continue
+        
+        # Idan Injin yaci karo da umarnin .watsa ko .nagama na baya, zai tsaya don kar ya debi tsofaffin labarai
+        if msg.text and msg.text.startswith((".watsa", ".nagama")): 
+            break 
+            
+        # Tabbatar da cewa sakon "Forwarded" ne
+        if msg.forward_date:
+            # Idan sakon yana dauke da hoto/bidiyo, ajiye ID dinsa
+            if msg.photo or msg.video or msg.document:
+                media_ids.append(msg.id)
+            
+            # Zare rubutun sakon
+            text = msg.text or msg.caption or ""
+            if text:
+                extracted_texts.append(text)
+                
+    if not extracted_texts and not media_ids:
+        return await message.reply_text("⚠️ Ban ga sababbin sakonnin da ka yi 'forwarding' kwanan nan ba.")
+        
+    # Saboda Telegram tana dawo da sababbi ne kafin tsofaffi, zamu juyasu (reverse) don su bi tsari
+    media_ids.reverse()
+    extracted_texts.reverse()
+    
+    MANUAL_MEDIA_CACHE = media_ids
+    ajiye_bayanai()
+    
+    combined_text = "\n\n---\n\n".join(extracted_texts) if extracted_texts else "[HOTO KO BIDIYO ZALLA]"
+    
+    await message.reply_text(f"✅ **An gane labarai/hotuna guda {len(media_ids)}!**\n\nInjin ya rike hotunan. Ga zallar rubutun a kasa (don saukin kwafa ka kaiwa Gemini):\n👇👇👇")
+    await send_long_message(message, combined_text)
+    await message.reply_text("👉 **YADDA ZAKA WATSA:**\nIdan ka gama narkarwa a Gemini, ka turo sabon rubutun a nan (Saved Messages).\nSannan ka yi **REPLY** din wannan sabon rubutun da umarnin **`.watsa`**")
+
+@app.on_message(filters.me & filters.command("watsa", prefixes="."))
+async def manual_watsa(client, message):
+    global MANUAL_MEDIA_CACHE
+    
+    # Tabbatar an yi reply din sabon rubutun
+    if not message.reply_to_message:
+        return await message.reply_text("⚠️ Kuskure: Dole kayi REPLY din sabon rubutun da kalmar `.watsa`")
+        
+    final_text = message.reply_to_message.text or message.reply_to_message.caption
+    if not final_text:
+        return await message.reply_text("⚠️ Ban ga rubutu a sakon da kayi reply ba.")
+        
+    await message.reply_text("⏳ Ana watsawa a tasharka tare da hotunan da ka zaba...")
+    final_text = f"{final_text.strip()}\n\n🔗 https://t.me/yaamahdi_hausa"
+    
+    valid_media = []
+    if MANUAL_MEDIA_CACHE:
+        # Kwaso ainihin hotunan/bidiyoyin daga "Saved Messages"
+        fetched_media = await app.get_messages("me", MANUAL_MEDIA_CACHE)
+        if not isinstance(fetched_media, list): fetched_media = [fetched_media]
+        valid_media = [m for m in fetched_media if not m.empty and (m.photo or m.video)]
+        
+    try:
+        if not valid_media:
+            # Idan babu hoto/bidiyo, tura rubutu zalla
+            await app.send_message(TARGET_CHANNEL, final_text)
+            
+        elif len(valid_media) == 1:
+            # Hoto/Bidiyo guda daya
+            await valid_media[0].copy(TARGET_CHANNEL, caption=final_text[:1024])
+            if len(final_text) > 1024:
+                await send_long_message(None, final_text[1024:])
+                
+        else:
+            # Hotuna/Bidiyoyi da yawa (Gungu)
+            media_group = []
+            for i, m in enumerate(valid_media[:10]):
+                cap = final_text[:1024] if i == 0 else ""
+                if m.photo:
+                    media_group.append(InputMediaPhoto(m.photo.file_id, caption=cap))
+                elif m.video:
+                    media_group.append(InputMediaVideo(m.video.file_id, caption=cap))
+                    
+            if media_group:
+                await app.send_media_group(TARGET_CHANNEL, media_group)
+                if len(final_text) > 1024:
+                    await send_long_message(None, final_text[1024:])
+                    
+        await message.reply_text("🎉 **An watsa cikin nasara!**")
+        MANUAL_MEDIA_CACHE = [] # Goge ma'adanar don aikin gaba
+        ajiye_bayanai()
+        
+    except Exception as e:
+        await message.reply_text(f"❌ Kuskure wajen watsawa: {e}")
+
+
+# ==========================================
+# 6. UMARNI MASU SAUKI (.dakata, .cigaba, .goge, .fasa)
 # ==========================================
 @app.on_message(filters.me & filters.command("dakata", prefixes="."))
 async def dakatar_da_aiki(client, message):
@@ -508,8 +595,8 @@ async def cigaba_aiki(client, message):
 
 @app.on_message(filters.me & filters.command("fasa", prefixes="."))
 async def fasa_aiki(client, message):
-    global TEMP_DATA, GLOBAL_CLUSTERS, CURRENT_INDEX, BOT_STATE, TRANSLATED_QUEUE, CURRENT_BATCH_TEXT
-    TEMP_DATA, GLOBAL_CLUSTERS, TRANSLATED_QUEUE, CURRENT_INDEX, CURRENT_BATCH_TEXT, BOT_STATE = [], [], [], 0, "", "IDLE"
+    global TEMP_DATA, GLOBAL_CLUSTERS, CURRENT_INDEX, BOT_STATE, TRANSLATED_QUEUE, CURRENT_BATCH_TEXT, MANUAL_MEDIA_CACHE
+    TEMP_DATA, GLOBAL_CLUSTERS, TRANSLATED_QUEUE, CURRENT_INDEX, CURRENT_BATCH_TEXT, BOT_STATE, MANUAL_MEDIA_CACHE = [], [], [], 0, "", "IDLE", []
     ajiye_bayanai()
     await message.reply_text("🛑 **An watsar da aikin gaba daya!**")
 
