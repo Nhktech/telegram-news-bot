@@ -17,8 +17,10 @@ try:
     API_HASH = os.environ.get("API_HASH")
     TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL")
     SESSION_STRING = os.environ.get("SESSION_STRING")
+    # Sabon wuri don Bot din da kake tura labarai
+    SCRAPE_BOT = os.environ.get("SCRAPE_BOT", "SAKA_SUNAN_BOT_DIN_A_CLOUD") 
 except Exception as e:
-    print("⚠️ Baka saka API_ID, API_HASH, TARGET_CHANNEL ko SESSION_STRING a cikin Values din Server ba!")
+    print("⚠️ Baka saka API_ID, API_HASH, TARGET_CHANNEL, SESSION_STRING ko SCRAPE_BOT a cikin Values din Server ba!")
 
 SOURCE_CHANNEL = "@PressTV"
 DEST_CHANNEL = "me"  
@@ -61,7 +63,6 @@ TRANSLATED_QUEUE = []
 LAST_FETCH_TIME = None 
 IS_POSTING = False 
 
-# SABON RUKUNI DON TSARIN ZABEN LABARAI DA KAI (MANUAL)
 MANUAL_MEDIA_CACHE = []
 
 STATE_FILE = "bot_state.json"
@@ -76,7 +77,7 @@ def ajiye_bayanai():
                 "BOT_STATE": BOT_STATE,
                 "TRANSLATED_QUEUE": TRANSLATED_QUEUE,
                 "LAST_FETCH_TIME": LAST_FETCH_TIME,
-                "MANUAL_MEDIA_CACHE": MANUAL_MEDIA_CACHE # An kara wannan don sabon tsarin
+                "MANUAL_MEDIA_CACHE": MANUAL_MEDIA_CACHE
             }, f)
     except: pass
 
@@ -92,13 +93,13 @@ def dauko_bayanai():
                 BOT_STATE = data.get("BOT_STATE", "IDLE")
                 TRANSLATED_QUEUE = data.get("TRANSLATED_QUEUE", [])
                 LAST_FETCH_TIME = data.get("LAST_FETCH_TIME", None)
-                MANUAL_MEDIA_CACHE = data.get("MANUAL_MEDIA_CACHE", []) # An kara wannan
+                MANUAL_MEDIA_CACHE = data.get("MANUAL_MEDIA_CACHE", [])
                 return True
         except: pass
     return False
 
 # ==========================================
-# 1. UMARNIN .kwaso (TSOHON TSARI)
+# 1. UMARNIN .kwaso (TSOHON TSARI NA ASALI)
 # ==========================================
 @app.on_message(filters.me & filters.command("kwaso", prefixes="."))
 async def kwaso_labarai(client, message):
@@ -139,16 +140,102 @@ async def kwaso_labarai(client, message):
     if not messages_in_range:
         return await message.reply_text("❌ Babu labari a wannan lokacin.")
 
+    await shirya_kwasassun_labarai(message, messages_in_range, SOURCE_CHANNEL, end_dt)
+
+
+# ==========================================
+# 1.5. SABON UMARNIN .kwasobot DA .gogebot (DON BOT DIN ZABIN LABARAI)
+# ==========================================
+
+@app.on_message(filters.me & filters.command("gogebot", prefixes="."))
+async def goge_bot_messages(client, message):
+    if not message.from_user or message.chat.id != message.from_user.id: return
+    
+    await message.reply_text(f"⏳ *Ana kakkabe dukkan sakonni daga cikin {SCRAPE_BOT}...*")
+    deleted_count = 0
+    try:
+        msg_ids = []
+        async for msg in app.get_chat_history(SCRAPE_BOT):
+            msg_ids.append(msg.id)
+            if len(msg_ids) == 100:
+                await app.delete_messages(SCRAPE_BOT, msg_ids)
+                deleted_count += 100
+                msg_ids = []
+                await asyncio.sleep(1) # Hutawa kar ayi FloodWait
+        if msg_ids:
+            await app.delete_messages(SCRAPE_BOT, msg_ids)
+            deleted_count += len(msg_ids)
+            
+        await message.reply_text(f"✅ **An goge sakonni guda {deleted_count} daga cikin Bot din.**\nYanzu wajen empty yake faufau, a shirye yake don sabon aiki!")
+    except Exception as e:
+        await message.reply_text(f"⚠️ An samu matsala wajen gogewa: {e}")
+
+@app.on_message(filters.me & filters.command("kwasobot", prefixes="."))
+async def kwasobot_labarai(client, message):
+    if not message.from_user or message.chat.id != message.from_user.id: return
+    
+    args = message.text.split()
+    messages_in_range = []
+    
+    try:
+        if len(args) == 1:
+            # 1. Kwaso Duka (Idan kawai ka rubuta .kwasobot)
+            await message.reply_text(f"⏳ *Ana kwaso DUKKAN abubuwan da ke cikin {SCRAPE_BOT}...*")
+            async for msg in app.get_chat_history(SCRAPE_BOT):
+                messages_in_range.append(msg)
+                
+        elif len(args) == 2 and args[1].isdigit():
+            # 2. Kwaso da Adadi (Misali: .kwasobot 15)
+            limit = int(args[1])
+            await message.reply_text(f"⏳ *Ana kwaso sakonni {limit} na karshe daga {SCRAPE_BOT}...*")
+            async for msg in app.get_chat_history(SCRAPE_BOT, limit=limit):
+                messages_in_range.append(msg)
+                
+        else:
+            # 3. Kwaso da Lokaci (Misali: .kwasobot yau 06:00 AM)
+            if len(args) == 4 and args[1].lower() == "yau":
+                if not LAST_FETCH_TIME:
+                    return await message.reply_text("⚠️ Babu tarihin lokacin baya. Saka cikakken lokaci.")
+                start_dt = datetime.strptime(LAST_FETCH_TIME, "%Y-%m-%d %H:%M:%S")
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                end_dt = datetime.strptime(f"{today_str} {args[2]} {args[3].upper()}", "%Y-%m-%d %I:%M %p")
+            elif len(args) == 7:
+                start_dt = datetime.strptime(f"{args[1]} {args[2]} {args[3].upper()}", "%Y-%m-%d %I:%M %p")
+                end_dt = datetime.strptime(f"{args[4]} {args[5]} {args[6].upper()}", "%Y-%m-%d %I:%M %p")
+            else:
+                return await message.reply_text("⚠️ Kuskure. Zaka iya rubuta `.kwasobot` (don kwaso duka) ko `.kwasobot yau 06:00 AM` (don lokaci).")
+
+            await message.reply_text(f"⏳ *Ana kwaso labarai daga {SCRAPE_BOT} akan lokacin da ka zaba...*")
+            async for msg in app.get_chat_history(SCRAPE_BOT):
+                if msg.date is None: continue
+                msg_date = msg.date.replace(tzinfo=None)
+                if msg_date > end_dt: continue
+                elif start_dt <= msg_date <= end_dt: messages_in_range.append(msg)
+                else: break
+                
+    except Exception as e:
+        return await message.reply_text(f"⚠️ Kuskure wajen duba Bot din: {e}")
+        
+    if not messages_in_range:
+        return await message.reply_text(f"❌ Babu labari a cikin {SCRAPE_BOT}.")
+        
+    await shirya_kwasassun_labarai(message, messages_in_range, SCRAPE_BOT, datetime.now())
+
+# Kwatankwacin yadda ake narkar da rubutun kwaso don amfani ta biyu (.kwaso da .kwasobot)
+async def shirya_kwasassun_labarai(message, messages_in_range, chat_source, end_dt):
+    global TEMP_DATA, GLOBAL_CLUSTERS, CURRENT_INDEX, BOT_STATE, TRANSLATED_QUEUE, CURRENT_BATCH_TEXT, LAST_FETCH_TIME
+
     messages_in_range.reverse()
     raw_items = []
     media_groups = {}
     for msg in messages_in_range:
         text = msg.text or msg.caption or ""
-        msg_date_str = msg.date.strftime("%Y-%m-%d %I:%M %p")
+        actual_date = msg.forward_date if msg.forward_date else msg.date
+        msg_date_str = actual_date.strftime("%Y-%m-%d %I:%M %p") if actual_date else "Babu Lokaci"
         
         if msg.media_group_id:
             if msg.media_group_id not in media_groups:
-                new_item = {"texts": [], "media_ids": [], "has_video": False, "has_photo": False, "date": msg_date_str}
+                new_item = {"texts": [], "media_ids": [], "has_video": False, "has_photo": False, "date": msg_date_str, "chat_id": chat_source}
                 media_groups[msg.media_group_id] = new_item
                 raw_items.append(new_item) 
             group = media_groups[msg.media_group_id]
@@ -162,7 +249,8 @@ async def kwaso_labarai(client, message):
                 "media_ids": [msg.id] if msg.media else [],
                 "has_video": bool(msg.video),
                 "has_photo": bool(msg.photo),
-                "date": msg_date_str
+                "date": msg_date_str,
+                "chat_id": chat_source
             })
             
     for item in raw_items:
@@ -177,7 +265,8 @@ async def kwaso_labarai(client, message):
     TRANSLATED_QUEUE = []
     CURRENT_INDEX = 0
     CURRENT_BATCH_TEXT = ""
-    LAST_FETCH_TIME = end_dt.strftime("%Y-%m-%d %H:%M:%S") 
+    if chat_source == SOURCE_CHANNEL:
+        LAST_FETCH_TIME = end_dt.strftime("%Y-%m-%d %H:%M:%S") 
     
     rubutu_don_gemini = ""
     for lamba, labari in enumerate(raw_items):
@@ -193,7 +282,7 @@ Hada lambobin wadanda suke magana akan abu daya ta amfani da hankali da kuma kwa
 DOKA: Mayar da amsa a JSON OBJECT kamar haka: {{"clusters": [[0, 2], [1], [3, 4]]}}
 Kanun Labaran:\n{rubutu_don_gemini}"""
 
-    await message.reply_text(f"✅ **An kwaso labarai guda {len(raw_items)}!**\n\nKwafi wannan ka kai wa Gemini:")
+    await message.reply_text(f"✅ **An tsara labarai guda {len(raw_items)}!**\n\nKwafi wannan ka kai wa Gemini don yi musu CLUSTER:")
     await send_long_message(message, prompt)
     await message.reply_text("👉 **Idan Gemini ya baka JSON din, LIKA SHI A NAN KA TURA.**")
     
@@ -201,7 +290,7 @@ Kanun Labaran:\n{rubutu_don_gemini}"""
     ajiye_bayanai() 
 
 # ==========================================
-# 2. INJIN BADA PROMPT NA FASSARA (TSOHON TSARI)
+# 2. INJIN BADA PROMPT NA FASSARA 
 # ==========================================
 async def tura_prompt_na_fassara(message, index):
     global TEMP_DATA, GLOBAL_CLUSTERS, BOT_STATE, BATCH_SIZE
@@ -243,7 +332,7 @@ Ga labaran:\n"""
     ajiye_bayanai()
 
 # ==========================================
-# 3. LURA DA SAKONNINKA DA .shigar (TSOHON TSARI)
+# 3. LURA DA SAKONNINKA DA .shigar
 # ==========================================
 @app.on_message(filters.me & ~filters.regex(r"^\."))
 async def saurare_rubutu(client, message):
@@ -354,11 +443,13 @@ Ga fassarar:\n"""
                 remainder_text = final_text[split_idx:].strip()
 
             combined_media_ids = [m for idx in cluster if idx < len(TEMP_DATA) for m in TEMP_DATA[idx]["media_ids"]][:10]
+            chat_source = TEMP_DATA[cluster[0]].get("chat_id", SOURCE_CHANNEL) if cluster else SOURCE_CHANNEL
 
             TRANSLATED_QUEUE.append({
                 "caption": caption_text,
                 "remainder": remainder_text,
-                "media_ids": combined_media_ids
+                "media_ids": combined_media_ids,
+                "chat_id": chat_source
             })
             
             CURRENT_INDEX += 1 
@@ -381,7 +472,7 @@ Ga fassarar:\n"""
             await message.reply_text(f"⏳ **Akwai sauran labarai {rem} da suka rage a hannunka na wannan rukunin.**")
 
 # ==========================================
-# 4. INJIN WATSAWA DA SABON TSARIN "FALLBACK"
+# 4. INJIN WATSAWA (DA TSARIN LOKACI 10 MIN)
 # ==========================================
 async def watsa_labarai_a_hankali():
     global TRANSLATED_QUEUE, BOT_STATE, IS_POSTING
@@ -396,15 +487,16 @@ async def watsa_labarai_a_hankali():
         caption = item['caption']
         remainder = item['remainder']
         media_ids = item['media_ids']
+        chat_id = item.get('chat_id', SOURCE_CHANNEL)
         
         combined_media = []
         if media_ids:
             try:
-                fetched = await app.get_messages(SOURCE_CHANNEL, media_ids)
+                fetched = await app.get_messages(chat_id, media_ids)
                 if not isinstance(fetched, list): fetched = [fetched]
                 combined_media = [m for m in fetched if m and not m.empty]
             except Exception as e:
-                print(f"⚠️ Kuskuren kwaso media: {e}")
+                print(f"⚠️ Kuskuren kwaso media daga {chat_id}: {e}")
             
         try:
             if not combined_media:
@@ -457,7 +549,7 @@ async def watsa_labarai_a_hankali():
         ajiye_bayanai()
         
         if len(TRANSLATED_QUEUE) > 0 and BOT_STATE != "PAUSED":
-            await asyncio.sleep(150) 
+            await asyncio.sleep(600) 
             
     BOT_STATE = "IDLE"
     IS_POSTING = False
@@ -466,7 +558,7 @@ async def watsa_labarai_a_hankali():
 
 
 # ==========================================
-# 5. SABON TSARI NA ZABEN LABARAI DA KAI (.nagama da .watsa)
+# 5. TSARIN ZABEN LABARAI MANUALLY (.nagama da .watsa)
 # ==========================================
 @app.on_message(filters.me & filters.command("nagama", prefixes="."))
 async def manual_nagama(client, message):
@@ -474,21 +566,14 @@ async def manual_nagama(client, message):
     extracted_texts = []
     media_ids = []
     
-    # Duba sakonni 20 na baya a cikin "Saved Messages"
     async for msg in app.get_chat_history("me", limit=20):
         if msg.id == message.id: continue
-        
-        # Idan Injin yaci karo da umarnin .watsa ko .nagama na baya, zai tsaya don kar ya debi tsofaffin labarai
         if msg.text and msg.text.startswith((".watsa", ".nagama")): 
             break 
             
-        # Tabbatar da cewa sakon "Forwarded" ne
         if msg.forward_date:
-            # Idan sakon yana dauke da hoto/bidiyo, ajiye ID dinsa
             if msg.photo or msg.video or msg.document:
                 media_ids.append(msg.id)
-            
-            # Zare rubutun sakon
             text = msg.text or msg.caption or ""
             if text:
                 extracted_texts.append(text)
@@ -496,7 +581,6 @@ async def manual_nagama(client, message):
     if not extracted_texts and not media_ids:
         return await message.reply_text("⚠️ Ban ga sababbin sakonnin da ka yi 'forwarding' kwanan nan ba.")
         
-    # Saboda Telegram tana dawo da sababbi ne kafin tsofaffi, zamu juyasu (reverse) don su bi tsari
     media_ids.reverse()
     extracted_texts.reverse()
     
@@ -505,15 +589,14 @@ async def manual_nagama(client, message):
     
     combined_text = "\n\n---\n\n".join(extracted_texts) if extracted_texts else "[HOTO KO BIDIYO ZALLA]"
     
-    await message.reply_text(f"✅ **An gane labarai/hotuna guda {len(media_ids)}!**\n\nInjin ya rike hotunan. Ga zallar rubutun a kasa (don saukin kwafa ka kaiwa Gemini):\n👇👇👇")
+    await message.reply_text(f"✅ **An gane labarai/hotuna guda {len(media_ids)}!**\n\nInjin ya rike hotunan. Ga zallar rubutun a kasa:\n👇👇👇")
     await send_long_message(message, combined_text)
-    await message.reply_text("👉 **YADDA ZAKA WATSA:**\nIdan ka gama narkarwa a Gemini, ka turo sabon rubutun a nan (Saved Messages).\nSannan ka yi **REPLY** din wannan sabon rubutun da umarnin **`.watsa`**")
+    await message.reply_text("👉 **YADDA ZAKA WATSA:**\nIdan ka gama narkarwa a Gemini, ka turo sabon rubutun a nan.\nSannan ka yi **REPLY** din wannan sabon rubutun da umarnin **`.watsa`**")
 
 @app.on_message(filters.me & filters.command("watsa", prefixes="."))
 async def manual_watsa(client, message):
     global MANUAL_MEDIA_CACHE
     
-    # Tabbatar an yi reply din sabon rubutun
     if not message.reply_to_message:
         return await message.reply_text("⚠️ Kuskure: Dole kayi REPLY din sabon rubutun da kalmar `.watsa`")
         
@@ -526,24 +609,18 @@ async def manual_watsa(client, message):
     
     valid_media = []
     if MANUAL_MEDIA_CACHE:
-        # Kwaso ainihin hotunan/bidiyoyin daga "Saved Messages"
         fetched_media = await app.get_messages("me", MANUAL_MEDIA_CACHE)
         if not isinstance(fetched_media, list): fetched_media = [fetched_media]
         valid_media = [m for m in fetched_media if not m.empty and (m.photo or m.video)]
         
     try:
         if not valid_media:
-            # Idan babu hoto/bidiyo, tura rubutu zalla
             await app.send_message(TARGET_CHANNEL, final_text)
-            
         elif len(valid_media) == 1:
-            # Hoto/Bidiyo guda daya
             await valid_media[0].copy(TARGET_CHANNEL, caption=final_text[:1024])
             if len(final_text) > 1024:
                 await send_long_message(None, final_text[1024:])
-                
         else:
-            # Hotuna/Bidiyoyi da yawa (Gungu)
             media_group = []
             for i, m in enumerate(valid_media[:10]):
                 cap = final_text[:1024] if i == 0 else ""
@@ -558,15 +635,14 @@ async def manual_watsa(client, message):
                     await send_long_message(None, final_text[1024:])
                     
         await message.reply_text("🎉 **An watsa cikin nasara!**")
-        MANUAL_MEDIA_CACHE = [] # Goge ma'adanar don aikin gaba
+        MANUAL_MEDIA_CACHE = [] 
         ajiye_bayanai()
         
     except Exception as e:
         await message.reply_text(f"❌ Kuskure wajen watsawa: {e}")
 
-
 # ==========================================
-# 6. UMARNI MASU SAUKI (.dakata, .cigaba, .goge, .fasa)
+# 6. UMARNI MASU SAUKI 
 # ==========================================
 @app.on_message(filters.me & filters.command("dakata", prefixes="."))
 async def dakatar_da_aiki(client, message):
